@@ -63,4 +63,10 @@ module.exports = withSentryConfig(module.exports, {
   // https://docs.sentry.io/product/crons/
   // https://vercel.com/docs/cron-jobs
   automaticVercelMonitors: true,
+
+  // Don't fail build if Sentry operations fail (e.g., release creation, source map upload)
+  errorHandler: (err, invokeErr, compilation) => {
+    console.warn('Sentry error during build (non-fatal):', err.message);
+    // Don't throw - allow build to continue
+  },
 });
