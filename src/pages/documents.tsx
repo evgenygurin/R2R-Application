@@ -6,11 +6,10 @@ import Layout from '@/components/Layout';
 import { useUserContext } from '@/context/UserContext';
 import { IngestionStatus } from '@/types';
 
-const PAGE_SIZE = 1000;
 const ITEMS_PER_PAGE = 10;
 
 const Index: React.FC = () => {
-  const { pipeline, getClient } = useUserContext();
+  const { getClient } = useUserContext();
   const [documents, setDocuments] = useState<DocumentResponse[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [totalEntries, setTotalEntries] = useState<number>(0);
@@ -32,7 +31,6 @@ const Index: React.FC = () => {
     }
   );
 
-  // New states for filters and search query
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<Record<string, any>>({
     ingestionStatus: [
@@ -51,8 +49,8 @@ const Index: React.FC = () => {
   });
   const [currentPage, setCurrentPage] = useState<number>(1);
 
-  /*** Fetching Documents in Batches ***/
-  const fetchAllDocuments = useCallback(async () => {
+  /*** Fetching Documents with Server-Side Pagination ***/
+  const fetchDocuments = useCallback(async () => {
     try {
       setLoading(true);
       const client = await getClient();
@@ -60,91 +58,29 @@ const Index: React.FC = () => {
         throw new Error('Failed to get authenticated client');
       }
 
-      // Check if documents are cached with timestamp
-      const cachedDocuments = localStorage.getItem('documents');
-      const cachedTotalEntries = localStorage.getItem('documentsTotalEntries');
-      const cacheTimestamp = localStorage.getItem('documentsTimestamp');
-      const currentTime = new Date().getTime();
-
-      // Use cache if it exists and is less than 5 minutes old and has a total entries count
-      if (
-        cachedDocuments &&
-        cachedTotalEntries &&
-        cacheTimestamp &&
-        currentTime - parseInt(cacheTimestamp) < 5 * 60 * 1000
-      ) {
-        const cachedDocs = JSON.parse(cachedDocuments);
-        setDocuments(cachedDocs);
-        setTotalEntries(parseInt(cachedTotalEntries));
-        setLoading(false);
-        return;
-      }
-
-      let offset = 0;
-      let allDocs: DocumentResponse[] = [];
-      let totalEntries = 0;
-
-      // Fetch first batch
-      const firstBatch = await client.documents.list({
+      const offset = (currentPage - 1) * ITEMS_PER_PAGE;
+      const response = await client.documents.list({
         offset: offset,
-        limit: 1000,
+        limit: ITEMS_PER_PAGE,
       });
 
-      if (firstBatch.results.length > 0) {
-        totalEntries = firstBatch.totalEntries;
-        setTotalEntries(totalEntries);
-
-        allDocs = firstBatch.results;
-        setDocuments(allDocs);
-
-        // Cache the documents with timestamp and total entries
-        localStorage.setItem('documents', JSON.stringify(allDocs));
-        localStorage.setItem('documentsTotalEntries', totalEntries.toString());
-        localStorage.setItem('documentsTimestamp', currentTime.toString());
-
-        // Set loading to false after the first batch is fetched
-        setLoading(false);
-      } else {
-        setLoading(false);
-        return;
-      }
-
-      offset += PAGE_SIZE;
-
-      // Continue fetching in the background
-      while (offset < totalEntries) {
-        const batch = await client.documents.list({
-          offset: offset,
-          limit: PAGE_SIZE,
-        });
-
-        if (batch.results.length === 0) {
-          break;
-        }
-
-        allDocs = allDocs.concat(batch.results);
-        setDocuments([...allDocs]);
-
-        offset += PAGE_SIZE;
-      }
-
-      setDocuments(allDocs);
-      localStorage.setItem('documents', JSON.stringify(allDocs));
-      localStorage.setItem('documentsTotalEntries', totalEntries.toString());
+      setDocuments(response.results);
+      setTotalEntries(response.totalEntries);
+      setLoading(false);
     } catch (error) {
       console.error('Error fetching documents:', error);
       setLoading(false);
     }
-  }, [pipeline?.deploymentUrl, getClient]);
+  }, [getClient, currentPage]);
 
   const refetchDocuments = useCallback(async () => {
-    await fetchAllDocuments();
+    await fetchDocuments();
     setSelectedDocumentIds([]);
-  }, [fetchAllDocuments]);
+  }, [fetchDocuments]);
 
   useEffect(() => {
-    fetchAllDocuments();
-  }, [fetchAllDocuments]);
+    fetchDocuments();
+  }, [fetchDocuments]);
 
   /*** Handle Pending Documents ***/
   useEffect(() => {
@@ -158,11 +94,11 @@ const Index: React.FC = () => {
     setPendingDocuments(pending);
   }, [documents]);
 
-  /*** Client-Side Filtering ***/
+  /*** Client-Side Filtering for Current Page ***/
   const filteredDocuments = useMemo(() => {
     let filtered = [...documents];
 
-    // Apply filters
+    // Apply status filters
     Object.entries(filters).forEach(([key, value]) => {
       if (
         value &&
@@ -176,11 +112,10 @@ const Index: React.FC = () => {
       }
     });
 
-    // Apply search query with improved handling
+    // Apply search query
     if (searchQuery && searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter((doc) => {
-        // Ensure title and id are strings before using toLowerCase
         const title = doc.title ? String(doc.title).toLowerCase() : '';
         const id = doc.id ? String(doc.id).toLowerCase() : '';
         return title.includes(query) || id.includes(query);
@@ -231,14 +166,16 @@ const Index: React.FC = () => {
     []
   );
 
-  const handlePageChange = (page: number) => {
+  const handlePageChange = useCallback((page: number) => {
     setCurrentPage(page);
-  };
+  }, []);
 
-  // Direct search input handler
-  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    handleSearchQueryChange(e.target.value);
-  };
+  const handleSearchInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      handleSearchQueryChange(e.target.value);
+    },
+    [handleSearchQueryChange]
+  );
 
   return (
     <Layout pageTitle="Documents" includeFooter={false}>
