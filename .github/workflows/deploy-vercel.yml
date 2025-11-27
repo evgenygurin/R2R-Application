@@ -1,6 +1,9 @@
 name: Vercel Deployment Check
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
@@ -28,9 +31,8 @@ jobs:
 
       - name: Build check
         run: pnpm build
-        env:
-          # Don't set SENTRY_AUTH_TOKEN in CI to avoid release creation permission errors
-          # Sentry will still work for error tracking, just won't create releases or upload source maps
+        # Note: SENTRY_AUTH_TOKEN is not set in CI to avoid release creation permission errors
+        # Sentry will still work for error tracking, just won't create releases or upload source maps
           
       - name: Comment PR
         if: github.event_name == 'pull_request'
