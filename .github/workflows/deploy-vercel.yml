@@ -49,9 +49,8 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          # Disable Sentry release creation in CI to avoid permission errors
-          SENTRY_DISABLE_AUTO_RELEASE: 'true'
+          # Don't set SENTRY_AUTH_TOKEN in CI to avoid release creation permission errors
+          # Sentry will still work for error tracking, just won't create releases or upload source maps
 
       - name: Deploy Project Artifacts to Vercel
         id: deploy
