@@ -66,7 +66,6 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
   const [selectedDocumentId, setSelectedDocumentId] = useState('');
   const [isDocumentInfoDialogOpen, setIsDocumentInfoDialogOpen] =
     useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
 
   const handleSelectAllInternal = (selected: boolean) => {
     onSelectAll(selected);
@@ -211,6 +210,7 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
       </div>
     );
 
+  // Documents are already filtered and paginated from parent component
   const displayedDocuments = documents;
 
   return (
