@@ -7,7 +7,7 @@ const path = require('path');
 const envPath = path.join(__dirname, '../.env');
 if (fs.existsSync(envPath)) {
   const envContent = fs.readFileSync(envPath, 'utf8');
-  envContent.split('\n').forEach(line => {
+  envContent.split('\n').forEach((line) => {
     const trimmedLine = line.trim();
     if (trimmedLine && !trimmedLine.startsWith('#')) {
       const [key, ...valueParts] = trimmedLine.split('=');
@@ -29,14 +29,26 @@ let envConfig = fs.readFileSync(envConfigPath, 'utf8');
 
 // Replace placeholders with environment variables
 const replacements = {
-  '__NEXT_PUBLIC_R2R_DEPLOYMENT_URL__': process.env.NEXT_PUBLIC_R2R_DEPLOYMENT_URL || '__NEXT_PUBLIC_R2R_DEPLOYMENT_URL__',
-  '__NEXT_PUBLIC_R2R_DEFAULT_EMAIL__': process.env.NEXT_PUBLIC_R2R_DEFAULT_EMAIL || '__NEXT_PUBLIC_R2R_DEFAULT_EMAIL__',
-  '__NEXT_PUBLIC_R2R_DEFAULT_PASSWORD__': process.env.NEXT_PUBLIC_R2R_DEFAULT_PASSWORD || '__NEXT_PUBLIC_R2R_DEFAULT_PASSWORD__',
-  '__R2R_DASHBOARD_DISABLE_TELEMETRY__': process.env.R2R_DASHBOARD_DISABLE_TELEMETRY || '__R2R_DASHBOARD_DISABLE_TELEMETRY__',
-  '__SUPABASE_URL__': process.env.SUPABASE_URL || '__SUPABASE_URL__',
-  '__SUPABASE_ANON_KEY__': process.env.SUPABASE_ANON_KEY || '__SUPABASE_ANON_KEY__',
-  '__NEXT_PUBLIC_HATCHET_DASHBOARD_URL__': process.env.NEXT_PUBLIC_HATCHET_DASHBOARD_URL || '__NEXT_PUBLIC_HATCHET_DASHBOARD_URL__',
-  '__NEXT_PUBLIC_SENTRY_DSN__': process.env.NEXT_PUBLIC_SENTRY_DSN || '__NEXT_PUBLIC_SENTRY_DSN__',
+  __NEXT_PUBLIC_R2R_DEPLOYMENT_URL__:
+    process.env.NEXT_PUBLIC_R2R_DEPLOYMENT_URL ||
+    '__NEXT_PUBLIC_R2R_DEPLOYMENT_URL__',
+  __NEXT_PUBLIC_R2R_DEFAULT_EMAIL__:
+    process.env.NEXT_PUBLIC_R2R_DEFAULT_EMAIL ||
+    '__NEXT_PUBLIC_R2R_DEFAULT_EMAIL__',
+  __NEXT_PUBLIC_R2R_DEFAULT_PASSWORD__:
+    process.env.NEXT_PUBLIC_R2R_DEFAULT_PASSWORD ||
+    '__NEXT_PUBLIC_R2R_DEFAULT_PASSWORD__',
+  __R2R_DASHBOARD_DISABLE_TELEMETRY__:
+    process.env.R2R_DASHBOARD_DISABLE_TELEMETRY ||
+    '__R2R_DASHBOARD_DISABLE_TELEMETRY__',
+  __SUPABASE_URL__: process.env.SUPABASE_URL || '__SUPABASE_URL__',
+  __SUPABASE_ANON_KEY__:
+    process.env.SUPABASE_ANON_KEY || '__SUPABASE_ANON_KEY__',
+  __NEXT_PUBLIC_HATCHET_DASHBOARD_URL__:
+    process.env.NEXT_PUBLIC_HATCHET_DASHBOARD_URL ||
+    '__NEXT_PUBLIC_HATCHET_DASHBOARD_URL__',
+  __NEXT_PUBLIC_SENTRY_DSN__:
+    process.env.NEXT_PUBLIC_SENTRY_DSN || '__NEXT_PUBLIC_SENTRY_DSN__',
 };
 
 // Perform replacements

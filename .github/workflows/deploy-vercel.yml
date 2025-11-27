@@ -33,7 +33,7 @@ jobs:
         run: pnpm build
         # Note: SENTRY_AUTH_TOKEN is not set in CI to avoid release creation permission errors
         # Sentry will still work for error tracking, just won't create releases or upload source maps
-          
+
       - name: Comment PR
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
