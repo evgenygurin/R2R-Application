@@ -2,6 +2,7 @@ import type { AppProps } from 'next/app';
 import { useRouter } from 'next/router';
 import { useTheme } from 'next-themes';
 import { useEffect, useCallback } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { brandingConfig } from '@/config/brandingConfig';
@@ -82,6 +83,7 @@ function MyApp(props: AppProps) {
     >
       <UserProvider>
         <MyAppContent {...props} />
+        <Analytics />
       </UserProvider>
     </ThemeProvider>
   );
