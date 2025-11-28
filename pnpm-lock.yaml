@@ -159,7 +159,7 @@ importers:
         specifier: ^1.212.1
         version: 1.212.1
       r2r-js:
-        specifier: ^0.4.43
+        specifier: 0.4.43
         version: 0.4.43
       react:
         specifier: 18.3.1

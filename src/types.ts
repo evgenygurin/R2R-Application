@@ -436,7 +436,7 @@ export interface UserContextProps {
     instanceUrl: string
   ) => Promise<void>;
   authState: AuthState;
-  getClient: () => r2rClient | null;
+  getClient: () => Promise<r2rClient | null>;
   client: r2rClient | null;
   viewMode: 'admin' | 'user';
   setViewMode: React.Dispatch<React.SetStateAction<'admin' | 'user'>>;
