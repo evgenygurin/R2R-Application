@@ -60,6 +60,7 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
   totalEntries,
   currentPage = 1,
   onPageChange,
+  itemsPerPage,
   middleContent,
 }) => {
   const { toast } = useToast();

@@ -95,6 +95,9 @@ const Index: React.FC = () => {
   }, [documents]);
 
   /*** Client-Side Filtering for Current Page ***/
+  // Note: When filters or search are active, we need to handle pagination differently
+  // For now, we apply client-side filtering to current page results
+  // TODO: Implement server-side filtering for better performance
   const filteredDocuments = useMemo(() => {
     let filtered = [...documents];
 
@@ -124,6 +127,23 @@ const Index: React.FC = () => {
 
     return filtered;
   }, [documents, filters, searchQuery]);
+
+  // Check if any filters or search are active
+  const hasActiveFilters = useMemo(() => {
+    const hasStatusFilters = Object.entries(filters).some(
+      ([key, value]) =>
+        (key === 'ingestionStatus' || key === 'extractionStatus') &&
+        Array.isArray(value) &&
+        value.length > 0 &&
+        // Check if not all options are selected (default state)
+        !(
+          (key === 'ingestionStatus' && value.length === 10) ||
+          (key === 'extractionStatus' && value.length === 4)
+        )
+    );
+    const hasSearch = searchQuery && searchQuery.trim().length > 0;
+    return hasStatusFilters || hasSearch;
+  }, [filters, searchQuery]);
 
   /*** Handle Selection ***/
   const handleSelectAll = useCallback(
@@ -193,7 +213,9 @@ const Index: React.FC = () => {
               selectedItems={selectedDocumentIds}
               visibleColumns={visibleColumns}
               onToggleColumn={handleToggleColumn}
-              totalEntries={filteredDocuments.length}
+              totalEntries={
+                hasActiveFilters ? filteredDocuments.length : totalEntries
+              }
               currentPage={currentPage}
               onPageChange={handlePageChange}
               itemsPerPage={ITEMS_PER_PAGE}
