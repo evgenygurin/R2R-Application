@@ -1,8 +1,8 @@
 import { Analytics } from '@vercel/analytics/react';
+import type { AppProps } from 'next/app';
 import { useRouter } from 'next/router';
 import { useTheme } from 'next-themes';
 import { useEffect, useCallback } from 'react';
-import type { AppProps } from 'next/app';
 
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { brandingConfig } from '@/config/brandingConfig';
