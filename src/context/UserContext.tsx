@@ -127,13 +127,26 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
           password: password,
         });
         console.log('Login successful, tokens received');
+        console.log('Tokens structure:', {
+          hasResults: !!tokens.results,
+          hasAccessToken: !!tokens.results?.accessToken,
+          hasRefreshToken: !!tokens.results?.refreshToken,
+        });
 
-        localStorage.setItem('accessToken', tokens.results.accessToken.token);
-        localStorage.setItem('refreshToken', tokens.results.refreshToken.token);
+        // Handle different response formats
+        const accessToken = tokens.results?.accessToken?.token || tokens.results?.access_token || tokens.accessToken?.token;
+        const refreshToken = tokens.results?.refreshToken?.token || tokens.results?.refresh_token || tokens.refreshToken?.token;
+
+        if (!accessToken || !refreshToken) {
+          throw new Error('Invalid token format received from server');
+        }
+
+        localStorage.setItem('accessToken', accessToken);
+        localStorage.setItem('refreshToken', refreshToken);
 
         newClient.setTokens(
-          tokens.results.accessToken.token,
-          tokens.results.refreshToken.token
+          accessToken,
+          refreshToken
         );
 
         setClient(newClient);
