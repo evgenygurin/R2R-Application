@@ -67,20 +67,24 @@ To enable source map uploads and release creation, you need to create a Sentry a
 
 **For local development:**
 Add to your `.env` file:
+
 ```bash
 SENTRY_AUTH_TOKEN=your_token_here
 ```
 
 **For Vercel:**
+
 1. Go to your Vercel project settings
 2. Navigate to Environment Variables
 3. Add `SENTRY_AUTH_TOKEN` with your token value
 4. Make sure it's available for Production, Preview, and Development
 
 **Alternative: Create `.env.sentry-build-plugin` file:**
+
 ```bash
 SENTRY_AUTH_TOKEN=your_token_here
 ```
+
 ⚠️ **Important**: Make sure `.env.sentry-build-plugin` is in `.gitignore` (it already is)
 
 ## Next Steps
@@ -89,4 +93,3 @@ SENTRY_AUTH_TOKEN=your_token_here
 2. ⚠️ Set `SENTRY_AUTH_TOKEN` in your `.env` for source map uploads (required for readable stack traces)
 3. Deploy to Vercel and add both environment variables there
 4. Test error reporting by triggering a test error
-

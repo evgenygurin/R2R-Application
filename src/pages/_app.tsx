@@ -1,17 +1,17 @@
+import * as Sentry from '@sentry/nextjs';
 import { Analytics } from '@vercel/analytics/react';
 import type { AppProps } from 'next/app';
 import { useRouter } from 'next/router';
 import { useTheme } from 'next-themes';
 import { useEffect, useCallback } from 'react';
-import * as Sentry from '@sentry/nextjs';
 
-import { ThemeProvider } from '@/components/ThemeProvider';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { ThemeProvider } from '@/components/ThemeProvider';
 import { brandingConfig } from '@/config/brandingConfig';
 import { UserProvider, useUserContext } from '@/context/UserContext';
-import '@/styles/globals.css';
-import { initializePostHog } from '@/lib/posthog-client';
 import logger from '@/lib/logger';
+import { initializePostHog } from '@/lib/posthog-client';
+import '@/styles/globals.css';
 
 function MyAppContent({ Component, pageProps }: AppProps) {
   const { setTheme } = useTheme();
@@ -96,7 +96,10 @@ function MyApp(props: AppProps) {
 
     return () => {
       window.removeEventListener('error', handleError);
-      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+      window.removeEventListener(
+        'unhandledrejection',
+        handleUnhandledRejection
+      );
     };
   }, []);
 
@@ -108,7 +111,8 @@ function MyApp(props: AppProps) {
     script.onload = () => {
       if (typeof window !== 'undefined' && window.__RUNTIME_CONFIG__) {
         logger.info('Runtime config loaded', {
-          hasDeploymentUrl: !!window.__RUNTIME_CONFIG__.NEXT_PUBLIC_R2R_DEPLOYMENT_URL,
+          hasDeploymentUrl:
+            !!window.__RUNTIME_CONFIG__.NEXT_PUBLIC_R2R_DEPLOYMENT_URL,
         });
       } else {
         logger.warn('Runtime config not found');

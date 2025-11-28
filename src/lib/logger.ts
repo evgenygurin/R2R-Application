@@ -11,7 +11,11 @@ interface LogContext {
 }
 
 class Logger {
-  private formatMessage(level: LogLevel, message: string, context?: LogContext): string {
+  private formatMessage(
+    level: LogLevel,
+    message: string,
+    context?: LogContext
+  ): string {
     const timestamp = new Date().toISOString();
     const contextStr = context ? ` ${JSON.stringify(context)}` : '';
     return `[${timestamp}] [${level.toUpperCase()}] ${message}${contextStr}`;
@@ -19,7 +23,7 @@ class Logger {
 
   private logToConsole(level: LogLevel, message: string, context?: LogContext) {
     const formatted = this.formatMessage(level, message, context);
-    
+
     switch (level) {
       case 'debug':
         console.debug(formatted);
@@ -36,7 +40,12 @@ class Logger {
     }
   }
 
-  private logToSentry(level: LogLevel, message: string, context?: LogContext, error?: Error) {
+  private logToSentry(
+    level: LogLevel,
+    message: string,
+    context?: LogContext,
+    error?: Error
+  ) {
     if (level === 'error') {
       if (error) {
         Sentry.captureException(error, {
@@ -92,4 +101,3 @@ class Logger {
 
 export const logger = new Logger();
 export default logger;
-

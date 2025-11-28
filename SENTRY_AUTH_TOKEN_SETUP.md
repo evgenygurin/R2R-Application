@@ -3,6 +3,7 @@
 ## Why You Need This
 
 The warnings you're seeing indicate that Sentry cannot upload source maps or create releases because no auth token is configured. This means:
+
 - ❌ Stack traces will be minified and hard to read
 - ❌ No release tracking
 - ✅ Errors will still be captured, but with less detail
@@ -24,6 +25,7 @@ The warnings you're seeing indicate that Sentry cannot upload source maps or cre
 ### 2. Add to Local `.env` File
 
 Add this line to your `.env` file:
+
 ```bash
 SENTRY_AUTH_TOKEN=your_copied_token_here
 ```
@@ -40,6 +42,7 @@ SENTRY_AUTH_TOKEN=your_copied_token_here
 ### 4. Redeploy
 
 After adding the token to Vercel, trigger a new deployment:
+
 ```bash
 vercel deploy --prod
 ```
@@ -49,6 +52,7 @@ Or push a new commit to trigger automatic deployment.
 ## Verify It Works
 
 After deployment, check the build logs. You should see:
+
 - ✅ `Creating release...`
 - ✅ `Uploading source maps...`
 - ❌ No more warnings about missing auth token
@@ -63,7 +67,7 @@ After deployment, check the build logs. You should see:
 ## Alternative: Organization Token
 
 Instead of a personal token, you can use an Organization Token:
+
 1. Go to: https://evgeny-pl.sentry.io/settings/auth-tokens/
 2. Use the organization token if available
 3. Same setup process applies
-

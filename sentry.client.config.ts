@@ -66,7 +66,8 @@ Sentry.init({
     if (event.contexts) {
       event.contexts.runtime = {
         name: 'browser',
-        version: typeof window !== 'undefined' ? navigator.userAgent : 'unknown',
+        version:
+          typeof window !== 'undefined' ? navigator.userAgent : 'unknown',
       };
     }
 
@@ -83,5 +84,7 @@ Sentry.init({
   // Note: captureUnhandledRejections is enabled by default in Sentry
 
   // Setting this option to true will print useful information to the console while you're setting up Sentry.
-  debug: process.env.NODE_ENV === 'development' && process.env.SENTRY_DEBUG === 'true',
+  debug:
+    process.env.NODE_ENV === 'development' &&
+    process.env.SENTRY_DEBUG === 'true',
 });

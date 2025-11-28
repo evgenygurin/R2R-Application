@@ -5,6 +5,7 @@
 ### 1. Улучшенная конфигурация Sentry
 
 #### Client-side (`sentry.client.config.ts`):
+
 - ✅ Автоматическое определение environment (development/production)
 - ✅ Интеграция `captureConsoleIntegration` для перехвата console.error/warn
 - ✅ Интеграция `browserTracingIntegration` для трейсинга
@@ -14,18 +15,21 @@
 - ✅ `attachStacktrace: true` для всех ошибок
 
 #### Server-side (`sentry.server.config.ts`):
+
 - ✅ Environment detection из Vercel переменных
 - ✅ Добавление Vercel контекста (region, env, commit SHA)
 - ✅ `beforeSend` фильтр
 - ✅ Автоматическое добавление runtime информации
 
 #### Edge (`sentry.edge.config.ts`):
+
 - ✅ Улучшенная конфигурация для edge runtime
 - ✅ Environment detection
 
 ### 2. React ErrorBoundary
 
 Создан компонент `ErrorBoundary` который:
+
 - ✅ Перехватывает ошибки рендеринга React
 - ✅ Автоматически отправляет их в Sentry
 - ✅ Показывает пользователю понятное сообщение об ошибке
@@ -34,6 +38,7 @@
 ### 3. Централизованный Logger
 
 Создан `src/lib/logger.ts` который:
+
 - ✅ Отправляет логи в консоль (для Vercel logs)
 - ✅ Отправляет важные логи в Sentry
 - ✅ Форматирует логи с timestamp и контекстом
@@ -42,6 +47,7 @@
 ### 4. Глобальные обработчики ошибок
 
 В `_app.tsx` добавлены:
+
 - ✅ `window.onerror` для перехвата необработанных ошибок
 - ✅ `unhandledrejection` для перехвата необработанных промисов
 - ✅ Автоматическая отправка в Sentry с контекстом
@@ -55,11 +61,13 @@
 ## Решение
 
 ### Для Vercel Logs:
+
 - Используйте `logger.info()`, `logger.error()` вместо `console.log()`
 - Логи автоматически форматируются с timestamp
 - Server-side логи видны в Vercel Dashboard → Logs
 
 ### Для Sentry:
+
 - Все ошибки автоматически отправляются в Sentry
 - Console.error/warn перехватываются и отправляются
 - React ошибки перехватываются ErrorBoundary
@@ -68,6 +76,7 @@
 ## Использование
 
 ### Вместо console.log:
+
 ```typescript
 // ❌ Старый способ
 console.log('User logged in', user);
@@ -81,6 +90,7 @@ logger.error('Login failed', error, { email, attemptCount: 3 });
 ```
 
 ### Ручная отправка в Sentry:
+
 ```typescript
 import * as Sentry from '@sentry/nextjs';
 
@@ -100,12 +110,14 @@ Sentry.captureMessage('Custom error message', {
 ## Просмотр логов
 
 ### Vercel Logs:
+
 1. Перейдите в Vercel Dashboard
 2. Выберите проект `r2r-dashboard`
 3. Откройте вкладку "Logs"
 4. Фильтруйте по environment (Production/Preview/Development)
 
 ### Sentry:
+
 1. Перейдите: https://evgeny-pl.sentry.io/projects/r2r-dashboard/
 2. Откройте "Issues" для просмотра ошибок
 3. Откройте "Performance" для просмотра трейсов
@@ -114,6 +126,7 @@ Sentry.captureMessage('Custom error message', {
 ## Environment Variables
 
 Убедитесь, что в Vercel установлены:
+
 - `NEXT_PUBLIC_SENTRY_DSN` - для отправки ошибок
 - `SENTRY_AUTH_TOKEN` - для загрузки source maps
 - `VERCEL_ENV` - автоматически устанавливается Vercel
@@ -131,8 +144,8 @@ Sentry.captureMessage('Custom error message', {
 ## Мониторинг
 
 После деплоя проверьте:
+
 1. ✅ Ошибки появляются в Sentry
 2. ✅ Логи видны в Vercel Dashboard
 3. ✅ Source maps загружены (читаемые stack traces)
 4. ✅ ErrorBoundary работает (попробуйте вызвать ошибку)
-
