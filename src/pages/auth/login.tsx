@@ -101,6 +101,19 @@ const LoginPage: React.FC = () => {
       let errorMessage = 'An unknown error occurred';
       if (error instanceof Error) {
         errorMessage = error.message;
+        // Extract more details if available
+        if ('status' in error) {
+          errorMessage = `Status ${error.status}: ${errorMessage}`;
+        }
+      } else if (typeof error === 'object' && error !== null) {
+        // Handle r2r-js error format
+        if ('message' in error) {
+          errorMessage = String(error.message);
+        } else if ('detail' in error) {
+          errorMessage = String(error.detail);
+        } else if ('error' in error) {
+          errorMessage = String(error.error);
+        }
       } else if (typeof error === 'string') {
         errorMessage = error;
       }

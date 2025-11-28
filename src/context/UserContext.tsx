@@ -120,10 +120,13 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     ): Promise<{ success: boolean; userRole: 'admin' | 'user' }> => {
       const newClient = new r2rClient(instanceUrl);
       try {
+        console.log('Attempting login to:', instanceUrl);
+        console.log('Email:', email);
         const tokens = await newClient.users.login({
           email: email,
           password: password,
         });
+        console.log('Login successful, tokens received');
 
         localStorage.setItem('accessToken', tokens.results.accessToken.token);
         localStorage.setItem('refreshToken', tokens.results.refreshToken.token);
@@ -170,7 +173,30 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         return { success: true, userRole };
       } catch (error) {
         console.error('Login failed:', error);
-        throw error;
+        
+        // Extract error message from different error formats
+        let errorMessage = 'Login failed';
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        } else if (typeof error === 'object' && error !== null) {
+          // Handle r2r-js error format
+          if ('message' in error) {
+            errorMessage = String(error.message);
+          } else if ('detail' in error) {
+            errorMessage = String(error.detail);
+          } else if ('error' in error) {
+            errorMessage = String(error.error);
+          }
+        } else if (typeof error === 'string') {
+          errorMessage = error;
+        }
+        
+        // Create a more descriptive error
+        const enhancedError = new Error(errorMessage);
+        if (error instanceof Error) {
+          Object.assign(enhancedError, error);
+        }
+        throw enhancedError;
       }
     },
     []
