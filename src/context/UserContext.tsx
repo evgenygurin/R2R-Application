@@ -212,12 +212,46 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         
         // Try to extract full error details
         if (error && typeof error === 'object') {
-          console.error('Full error object:', JSON.stringify(error, null, 2));
+          try {
+            console.error('Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+          } catch (e) {
+            console.error('Could not stringify error:', e);
+            console.error('Error object keys:', Object.keys(error));
+          }
           if ('response' in error) {
-            console.error('Error response:', (error as any).response);
+            const response = (error as any).response;
+            console.error('Error response:', response);
+            if (response && typeof response === 'object') {
+              console.error('Response status:', response.status);
+              console.error('Response statusText:', response.statusText);
+              console.error('Response data:', response.data);
+              try {
+                console.error('Response data (stringified):', JSON.stringify(response.data, null, 2));
+              } catch (e) {
+                console.error('Could not stringify response data');
+              }
+            }
           }
           if ('request' in error) {
-            console.error('Error request:', (error as any).request);
+            const request = (error as any).request;
+            console.error('Error request:', request);
+            if (request && typeof request === 'object') {
+              console.error('Request URL:', request.url);
+              console.error('Request method:', request.method);
+              console.error('Request headers:', request.headers);
+              console.error('Request data:', request.data);
+            }
+          }
+          // Check for axios-style error
+          if ('config' in error) {
+            const config = (error as any).config;
+            console.error('Request config:', {
+              url: config?.url,
+              method: config?.method,
+              baseURL: config?.baseURL,
+              data: config?.data,
+              headers: config?.headers,
+            });
           }
         }
         
