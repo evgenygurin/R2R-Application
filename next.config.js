@@ -39,6 +39,10 @@ module.exports = withSentryConfig(module.exports, {
   // Set SENTRY_AUTH_TOKEN environment variable or use .env.sentry-build-plugin file
   authToken: process.env.SENTRY_AUTH_TOKEN,
 
+  // Note: The deprecated warning about --use-artifact-bundle comes from Sentry CLI
+  // It's informational and will be removed in the next major version of @sentry/cli
+  // No action needed - artifact bundles are the recommended approach
+
   // Only print logs for uploading source maps in CI
   silent: !process.env.CI,
 
