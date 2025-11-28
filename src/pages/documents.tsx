@@ -1,15 +1,47 @@
 import { DocumentResponse } from 'r2r-js';
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react';
 
 import DocumentsTable from '@/components/ChatDemo/DocumentsTable';
 import Layout from '@/components/Layout';
 import { useUserContext } from '@/context/UserContext';
+import debounce from '@/lib/debounce';
+import logger from '@/lib/logger';
 import { IngestionStatus } from '@/types';
 
 const ITEMS_PER_PAGE = 10;
+const SEARCH_DEBOUNCE_MS = 500;
+const MAX_DOCUMENTS_FOR_CLIENT_FILTERING = 1000; // Threshold for client-side filtering
+
+// Default filter values (all options selected = no filter)
+const DEFAULT_INGESTION_STATUSES = [
+  'pending',
+  'parsing',
+  'extracting',
+  'chunking',
+  'embedding',
+  'augmenting',
+  'storing',
+  'enriching',
+  'failed',
+  'success',
+];
+
+const DEFAULT_EXTRACTION_STATUSES = [
+  'success',
+  'failed',
+  'pending',
+  'processing',
+];
 
 const Index: React.FC = () => {
   const { getClient } = useUserContext();
+  const [allDocuments, setAllDocuments] = useState<DocumentResponse[]>([]);
   const [documents, setDocuments] = useState<DocumentResponse[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [totalEntries, setTotalEntries] = useState<number>(0);
@@ -32,25 +64,43 @@ const Index: React.FC = () => {
   );
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [filters, setFilters] = useState<Record<string, any>>({
-    ingestionStatus: [
-      'pending',
-      'parsing',
-      'extracting',
-      'chunking',
-      'embedding',
-      'augmenting',
-      'storing',
-      'enriching',
-      'failed',
-      'success',
-    ],
-    extractionStatus: ['success', 'failed', 'pending', 'processing'],
+    ingestionStatus: [...DEFAULT_INGESTION_STATUSES],
+    extractionStatus: [...DEFAULT_EXTRACTION_STATUSES],
   });
   const [currentPage, setCurrentPage] = useState<number>(1);
 
-  /*** Fetching Documents with Server-Side Pagination ***/
-  const fetchDocuments = useCallback(async () => {
+  // Track if we're using client-side filtering (when filters/search are active)
+  const [useClientSideFiltering, setUseClientSideFiltering] =
+    useState<boolean>(false);
+
+  // Ref to track if we need to load all documents
+  const shouldLoadAllDocuments = useRef(false);
+
+  /**
+   * Check if filters are active (not all default values selected)
+   */
+  const hasActiveFilters = useMemo(() => {
+    const hasIngestionFilter =
+      filters.ingestionStatus.length !== DEFAULT_INGESTION_STATUSES.length ||
+      !DEFAULT_INGESTION_STATUSES.every((status) =>
+        filters.ingestionStatus.includes(status)
+      );
+    const hasExtractionFilter =
+      filters.extractionStatus.length !== DEFAULT_EXTRACTION_STATUSES.length ||
+      !DEFAULT_EXTRACTION_STATUSES.every((status) =>
+        filters.extractionStatus.includes(status)
+      );
+    const hasSearch = debouncedSearchQuery.trim().length > 0;
+
+    return hasIngestionFilter || hasExtractionFilter || hasSearch;
+  }, [filters, debouncedSearchQuery]);
+
+  /**
+   * Fetch documents with server-side pagination (when no filters/search)
+   */
+  const fetchDocumentsPaginated = useCallback(async () => {
     try {
       setLoading(true);
       const client = await getClient();
@@ -66,58 +116,108 @@ const Index: React.FC = () => {
 
       setDocuments(response.results);
       setTotalEntries(response.totalEntries);
+      setAllDocuments([]); // Clear all documents when using pagination
       setLoading(false);
     } catch (error) {
-      console.error('Error fetching documents:', error);
+      logger.error('Error fetching documents', error as Error, {
+        page: currentPage,
+        mode: 'paginated',
+      });
       setLoading(false);
     }
   }, [getClient, currentPage]);
 
-  const refetchDocuments = useCallback(async () => {
-    await fetchDocuments();
-    setSelectedDocumentIds([]);
-  }, [fetchDocuments]);
+  /**
+   * Fetch all documents for client-side filtering
+   */
+  const fetchAllDocuments = useCallback(async () => {
+    try {
+      setLoading(true);
+      const client = await getClient();
+      if (!client) {
+        throw new Error('Failed to get authenticated client');
+      }
 
-  useEffect(() => {
-    fetchDocuments();
-  }, [fetchDocuments]);
+      let allDocs: DocumentResponse[] = [];
+      let offset = 0;
+      const limit = 100; // Fetch in batches
+      let total = 0;
 
-  /*** Handle Pending Documents ***/
-  useEffect(() => {
-    const pending = documents
-      .filter(
-        (doc) =>
-          doc.ingestionStatus !== IngestionStatus.SUCCESS &&
-          doc.ingestionStatus !== IngestionStatus.FAILED
-      )
-      .map((doc) => doc.id);
-    setPendingDocuments(pending);
-  }, [documents]);
+      // Fetch first batch to get total
+      const firstBatch = await client.documents.list({
+        offset: 0,
+        limit: limit,
+      });
+      total = firstBatch.totalEntries;
+      allDocs = firstBatch.results;
 
-  /*** Client-Side Filtering for Current Page ***/
-  // Note: When filters or search are active, we need to handle pagination differently
-  // For now, we apply client-side filtering to current page results
-  // TODO: Implement server-side filtering for better performance
-  const filteredDocuments = useMemo(() => {
-    let filtered = [...documents];
-
-    // Apply status filters
-    Object.entries(filters).forEach(([key, value]) => {
-      if (
-        value &&
-        value.length > 0 &&
-        (key === 'ingestionStatus' || key === 'extractionStatus')
-      ) {
-        filtered = filtered.filter((doc) => {
-          const status = doc[key];
-          return Array.isArray(value) && value.includes(status);
+      // If total is reasonable, fetch all documents
+      if (total <= MAX_DOCUMENTS_FOR_CLIENT_FILTERING) {
+        offset = limit;
+        while (offset < total) {
+          const batch = await client.documents.list({
+            offset: offset,
+            limit: limit,
+          });
+          allDocs = allDocs.concat(batch.results);
+          offset += limit;
+        }
+      } else {
+        // If too many documents, show warning and limit to first batch
+        logger.warn('Too many documents for client-side filtering', {
+          total,
+          maxAllowed: MAX_DOCUMENTS_FOR_CLIENT_FILTERING,
         });
       }
-    });
+
+      setAllDocuments(allDocs);
+      setTotalEntries(total);
+      setLoading(false);
+    } catch (error) {
+      logger.error('Error fetching all documents', error as Error, {
+        mode: 'all',
+      });
+      setLoading(false);
+    }
+  }, [getClient]);
+
+  /**
+   * Apply client-side filtering and pagination
+   */
+  const filteredDocuments = useMemo(() => {
+    if (!useClientSideFiltering) {
+      // When using server-side pagination, return documents as-is
+      return documents;
+    }
+
+    // Apply filters and search to all documents
+    let filtered = [...allDocuments];
+
+    // Apply ingestion status filter
+    if (
+      filters.ingestionStatus &&
+      filters.ingestionStatus.length > 0 &&
+      filters.ingestionStatus.length !== DEFAULT_INGESTION_STATUSES.length
+    ) {
+      filtered = filtered.filter((doc) =>
+        filters.ingestionStatus.includes(doc.ingestionStatus)
+      );
+    }
+
+    // Apply extraction status filter
+    if (
+      filters.extractionStatus &&
+      filters.extractionStatus.length > 0 &&
+      filters.extractionStatus.length !== DEFAULT_EXTRACTION_STATUSES.length
+    ) {
+      filtered = filtered.filter((doc) =>
+        filters.extractionStatus.includes(doc.extractionStatus)
+      );
+    }
 
     // Apply search query
-    if (searchQuery && searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
+    if (debouncedSearchQuery.trim()) {
+      const query = debouncedSearchQuery.toLowerCase().trim();
       filtered = filtered.filter((doc) => {
         const title = doc.title ? String(doc.title).toLowerCase() : '';
         const id = doc.id ? String(doc.id).toLowerCase() : '';
@@ -126,35 +226,102 @@ const Index: React.FC = () => {
     }
 
     return filtered;
-  }, [documents, filters, searchQuery]);
+  }, [
+    allDocuments,
+    documents,
+    filters,
+    debouncedSearchQuery,
+    useClientSideFiltering,
+  ]);
 
-  // Check if any filters or search are active
-  const hasActiveFilters = useMemo(() => {
-    const hasStatusFilters = Object.entries(filters).some(
-      ([key, value]) =>
-        (key === 'ingestionStatus' || key === 'extractionStatus') &&
-        Array.isArray(value) &&
-        value.length > 0 &&
-        // Check if not all options are selected (default state)
-        !(
-          (key === 'ingestionStatus' && value.length === 10) ||
-          (key === 'extractionStatus' && value.length === 4)
-        )
-    );
-    const hasSearch = searchQuery && searchQuery.trim().length > 0;
-    return hasStatusFilters || hasSearch;
-  }, [filters, searchQuery]);
+  /**
+   * Paginate filtered documents for display
+   */
+  const paginatedDocuments = useMemo(() => {
+    if (!useClientSideFiltering) {
+      return filteredDocuments;
+    }
 
-  /*** Handle Selection ***/
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    return filteredDocuments.slice(startIndex, endIndex);
+  }, [filteredDocuments, currentPage, useClientSideFiltering]);
+
+  /**
+   * Calculate total entries for pagination
+   */
+  const displayTotalEntries = useMemo(() => {
+    if (useClientSideFiltering) {
+      return filteredDocuments.length;
+    }
+    return totalEntries;
+  }, [filteredDocuments.length, totalEntries, useClientSideFiltering]);
+
+  /**
+   * Debounced search handler
+   */
+  const debouncedSearchHandler = useMemo(
+    () =>
+      debounce((query: string) => {
+        setDebouncedSearchQuery(query);
+      }, SEARCH_DEBOUNCE_MS),
+    []
+  );
+
+  /**
+   * Effect: Determine if we need client-side filtering
+   */
+  useEffect(() => {
+    const needsClientFiltering = hasActiveFilters;
+    setUseClientSideFiltering(needsClientFiltering);
+    shouldLoadAllDocuments.current = needsClientFiltering;
+  }, [hasActiveFilters]);
+
+  /**
+   * Effect: Fetch documents based on filtering mode
+   */
+  useEffect(() => {
+    if (useClientSideFiltering) {
+      fetchAllDocuments();
+    } else {
+      fetchDocumentsPaginated();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useClientSideFiltering, currentPage]);
+
+  /**
+   * Effect: Reset to page 1 when filters/search change
+   */
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, debouncedSearchQuery]);
+
+  /**
+   * Effect: Handle pending documents
+   */
+  useEffect(() => {
+    const pending = (useClientSideFiltering ? allDocuments : documents)
+      .filter(
+        (doc) =>
+          doc.ingestionStatus !== IngestionStatus.SUCCESS &&
+          doc.ingestionStatus !== IngestionStatus.FAILED
+      )
+      .map((doc) => doc.id);
+    setPendingDocuments(pending);
+  }, [documents, allDocuments, useClientSideFiltering]);
+
+  /**
+   * Handle selection
+   */
   const handleSelectAll = useCallback(
     (selected: boolean) => {
       if (selected) {
-        setSelectedDocumentIds(filteredDocuments.map((doc) => doc.id));
+        setSelectedDocumentIds(paginatedDocuments.map((doc) => doc.id));
       } else {
         setSelectedDocumentIds([]);
       }
     },
-    [filteredDocuments]
+    [paginatedDocuments]
   );
 
   const handleSelectItem = useCallback((itemId: string, selected: boolean) => {
@@ -167,18 +334,25 @@ const Index: React.FC = () => {
     });
   }, []);
 
-  /*** Handle Filters and Search ***/
-  const handleFiltersChange = (newFilters: Record<string, any>) => {
+  /**
+   * Handle filters and search
+   */
+  const handleFiltersChange = useCallback((newFilters: Record<string, any>) => {
     setFilters(newFilters);
-    setCurrentPage(1); // Reset to page 1 when filters change
-  };
+  }, []);
 
-  const handleSearchQueryChange = (query: string) => {
-    setSearchQuery(query);
-    setCurrentPage(1); // Reset to page 1 when search changes
-  };
+  const handleSearchInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      setSearchQuery(value);
+      debouncedSearchHandler(value);
+    },
+    [debouncedSearchHandler]
+  );
 
-  /*** Handle Column Visibility ***/
+  /**
+   * Handle column visibility
+   */
   const handleToggleColumn = useCallback(
     (columnKey: string, isVisible: boolean) => {
       setVisibleColumns((prev) => ({ ...prev, [columnKey]: isVisible }));
@@ -186,16 +360,24 @@ const Index: React.FC = () => {
     []
   );
 
+  /**
+   * Handle page change
+   */
   const handlePageChange = useCallback((page: number) => {
     setCurrentPage(page);
   }, []);
 
-  const handleSearchInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      handleSearchQueryChange(e.target.value);
-    },
-    [handleSearchQueryChange]
-  );
+  /**
+   * Refresh documents
+   */
+  const refetchDocuments = useCallback(async () => {
+    if (useClientSideFiltering) {
+      await fetchAllDocuments();
+    } else {
+      await fetchDocumentsPaginated();
+    }
+    setSelectedDocumentIds([]);
+  }, [useClientSideFiltering, fetchAllDocuments, fetchDocumentsPaginated]);
 
   return (
     <Layout pageTitle="Documents" includeFooter={false}>
@@ -203,7 +385,7 @@ const Index: React.FC = () => {
         <div className="relative flex-grow bg-zinc-900 mt-[4rem] sm:mt-[4rem]">
           <div className="mx-auto max-w-6xl mb-12 mt-4 p-4 h-full">
             <DocumentsTable
-              documents={filteredDocuments}
+              documents={paginatedDocuments}
               loading={loading}
               onRefresh={refetchDocuments}
               pendingDocuments={pendingDocuments}
@@ -213,17 +395,17 @@ const Index: React.FC = () => {
               selectedItems={selectedDocumentIds}
               visibleColumns={visibleColumns}
               onToggleColumn={handleToggleColumn}
-              totalEntries={
-                hasActiveFilters ? filteredDocuments.length : totalEntries
-              }
+              totalEntries={displayTotalEntries}
               currentPage={currentPage}
               onPageChange={handlePageChange}
               itemsPerPage={ITEMS_PER_PAGE}
               filters={filters}
               onFiltersChange={handleFiltersChange}
               searchQuery={searchQuery}
-              onSearchQueryChange={handleSearchQueryChange}
-              // pass search bar to format correctly
+              onSearchQueryChange={(query: string) => {
+                setSearchQuery(query);
+                debouncedSearchHandler(query);
+              }}
               middleContent={
                 <div className="w-full px-2">
                   <input
