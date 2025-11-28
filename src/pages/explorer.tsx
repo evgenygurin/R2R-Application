@@ -2359,7 +2359,7 @@ function FileManager({
   return (
     <Card className="w-full max-w-full mx-auto explorer-card">
       {/* Header inside card */}
-      <div className="flex flex-col gap-3 p-4 border-b bg-muted/30 dark:bg-muted/20">
+      <div className="flex flex-col gap-3 p-4 border-b bg-background">
         {/* First row: Breadcrumbs and Actions */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-sm min-w-0 flex-1 overflow-hidden">
@@ -2622,7 +2622,7 @@ function FileManager({
 
       {/* Bulk Actions Toolbar */}
       {selectedFiles.length > 0 && (
-        <div className="bg-muted/50 p-2 flex items-center justify-between border-b">
+        <div className="bg-background p-2 flex items-center justify-between border-b">
           <div className="flex items-center space-x-2">
             <Button
               variant="ghost"
@@ -2682,7 +2682,7 @@ function FileManager({
         </div>
       )}
 
-      <CardContent className="p-0">
+      <CardContent className="p-0 bg-background">
         <Tabs
           value={viewMode}
           onValueChange={(value) => setViewMode(value as 'list' | 'grid')}
@@ -2983,7 +2983,7 @@ function FileManager({
                             onClick={() => handleFileAction('open', file)}
                           >
                             {getFileIcon(file)}
-                            <span className="font-medium">
+                            <span className="font-medium font-mono text-sm">
                               {file.title || file.id}
                             </span>
                           </div>
@@ -3145,7 +3145,7 @@ function FileManager({
                     >
                       <div className="mb-2">{getFileIcon(file)}</div>
                       <div className="text-center">
-                        <p className="font-medium truncate w-full max-w-[120px]">
+                        <p className="font-medium font-mono text-sm truncate w-full max-w-[120px]">
                           {file.title || file.id}
                         </p>
                         <p className="text-xs text-muted-foreground">
