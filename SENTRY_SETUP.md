@@ -49,10 +49,44 @@ The following files are configured for Sentry:
 Access your Sentry project at:
 https://evgeny-pl.sentry.io/projects/r2r-dashboard/
 
+## Auth Token Setup (Required for Source Maps)
+
+To enable source map uploads and release creation, you need to create a Sentry auth token:
+
+### Step 1: Create Auth Token
+
+1. Go to Sentry: https://evgeny-pl.sentry.io/settings/auth-tokens/
+2. Click "Create New Token"
+3. Set the following scopes:
+   - `project:read`
+   - `project:releases`
+   - `org:read`
+4. Copy the generated token
+
+### Step 2: Add Token to Environment
+
+**For local development:**
+Add to your `.env` file:
+```bash
+SENTRY_AUTH_TOKEN=your_token_here
+```
+
+**For Vercel:**
+1. Go to your Vercel project settings
+2. Navigate to Environment Variables
+3. Add `SENTRY_AUTH_TOKEN` with your token value
+4. Make sure it's available for Production, Preview, and Development
+
+**Alternative: Create `.env.sentry-build-plugin` file:**
+```bash
+SENTRY_AUTH_TOKEN=your_token_here
+```
+⚠️ **Important**: Make sure `.env.sentry-build-plugin` is in `.gitignore` (it already is)
+
 ## Next Steps
 
-1. Set `NEXT_PUBLIC_SENTRY_DSN` in your `.env` file
-2. Set `SENTRY_AUTH_TOKEN` in your `.env` for source map uploads (optional)
-3. Deploy to Vercel and add the environment variable there
+1. ✅ Set `NEXT_PUBLIC_SENTRY_DSN` in your `.env` file
+2. ⚠️ Set `SENTRY_AUTH_TOKEN` in your `.env` for source map uploads (required for readable stack traces)
+3. Deploy to Vercel and add both environment variables there
 4. Test error reporting by triggering a test error
 

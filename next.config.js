@@ -35,6 +35,10 @@ module.exports = withSentryConfig(module.exports, {
   org: 'evgeny-pl',
   project: 'r2r-dashboard',
 
+  // Auth token for uploading source maps and creating releases
+  // Set SENTRY_AUTH_TOKEN environment variable or use .env.sentry-build-plugin file
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+
   // Only print logs for uploading source maps in CI
   silent: !process.env.CI,
 
