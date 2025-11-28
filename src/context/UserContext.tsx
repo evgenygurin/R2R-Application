@@ -141,6 +141,10 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         };
         console.log('Login payload:', { email: loginPayload.email, hasPassword: !!loginPayload.password });
         
+        // Log the actual request that will be sent
+        console.log('Calling r2rClient.users.login with payload:', loginPayload);
+        console.log('r2rClient instance URL:', normalizedUrl);
+        
         const tokens = await newClient.users.login(loginPayload);
         console.log('Login successful, tokens received');
         console.log('Tokens structure:', {
@@ -205,6 +209,17 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         console.error('Error type:', typeof error);
         console.error('Error constructor:', error?.constructor?.name);
         console.error('Error keys:', error && typeof error === 'object' ? Object.keys(error) : 'N/A');
+        
+        // Try to extract full error details
+        if (error && typeof error === 'object') {
+          console.error('Full error object:', JSON.stringify(error, null, 2));
+          if ('response' in error) {
+            console.error('Error response:', (error as any).response);
+          }
+          if ('request' in error) {
+            console.error('Error request:', (error as any).request);
+          }
+        }
         
         // Extract error message from different error formats
         let errorMessage = 'Login failed';
