@@ -38,6 +38,9 @@ module.exports = withSentryConfig(module.exports, {
   // Only print logs for uploading source maps in CI
   silent: !process.env.CI,
 
+  // Disable telemetry in CI to avoid unnecessary API calls
+  telemetry: !process.env.CI,
+
   // For all available options, see:
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/
 
@@ -63,4 +66,10 @@ module.exports = withSentryConfig(module.exports, {
   // https://docs.sentry.io/product/crons/
   // https://vercel.com/docs/cron-jobs
   automaticVercelMonitors: true,
+
+  // Don't fail build if Sentry operations fail (e.g., release creation, source map upload)
+  errorHandler: (err, invokeErr, compilation) => {
+    console.warn('Sentry error during build (non-fatal):', err.message);
+    // Don't throw - allow build to continue
+  },
 });
