@@ -118,14 +118,30 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
       password: string,
       instanceUrl: string
     ): Promise<{ success: boolean; userRole: 'admin' | 'user' }> => {
-      const newClient = new r2rClient(instanceUrl);
+      // Normalize the instance URL
+      let normalizedUrl = instanceUrl.trim();
+      // Remove trailing slash if present
+      if (normalizedUrl.endsWith('/')) {
+        normalizedUrl = normalizedUrl.slice(0, -1);
+      }
+      
+      console.log('Original instance URL:', instanceUrl);
+      console.log('Normalized instance URL:', normalizedUrl);
+      
+      const newClient = new r2rClient(normalizedUrl);
       try {
-        console.log('Attempting login to:', instanceUrl);
+        console.log('Attempting login to:', normalizedUrl);
         console.log('Email:', email);
-        const tokens = await newClient.users.login({
+        console.log('Password provided:', !!password);
+        
+        // Log the request payload structure
+        const loginPayload = {
           email: email,
           password: password,
-        });
+        };
+        console.log('Login payload:', { email: loginPayload.email, hasPassword: !!loginPayload.password });
+        
+        const tokens = await newClient.users.login(loginPayload);
         console.log('Login successful, tokens received');
         console.log('Tokens structure:', {
           hasResults: !!tokens.results,
@@ -186,11 +202,24 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         return { success: true, userRole };
       } catch (error) {
         console.error('Login failed:', error);
+        console.error('Error type:', typeof error);
+        console.error('Error constructor:', error?.constructor?.name);
+        console.error('Error keys:', error && typeof error === 'object' ? Object.keys(error) : 'N/A');
         
         // Extract error message from different error formats
         let errorMessage = 'Login failed';
+        let statusCode: number | undefined;
+        
         if (error instanceof Error) {
           errorMessage = error.message;
+          // Check for status code in error object
+          if ('status' in error) {
+            statusCode = error.status as number;
+          } else if ('statusCode' in error) {
+            statusCode = (error as any).statusCode;
+          } else if ('code' in error) {
+            statusCode = (error as any).code;
+          }
         } else if (typeof error === 'object' && error !== null) {
           // Handle r2r-js error format
           if ('message' in error) {
@@ -200,14 +229,25 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
           } else if ('error' in error) {
             errorMessage = String(error.error);
           }
+          if ('status' in error) {
+            statusCode = (error as any).status;
+          } else if ('statusCode' in error) {
+            statusCode = (error as any).statusCode;
+          }
         } else if (typeof error === 'string') {
           errorMessage = error;
         }
+        
+        console.error('Extracted error message:', errorMessage);
+        console.error('Extracted status code:', statusCode);
         
         // Create a more descriptive error
         const enhancedError = new Error(errorMessage);
         if (error instanceof Error) {
           Object.assign(enhancedError, error);
+        }
+        if (statusCode !== undefined) {
+          (enhancedError as any).status = statusCode;
         }
         throw enhancedError;
       }
