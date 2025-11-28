@@ -32,7 +32,7 @@ module.exports = withSentryConfig(module.exports, {
   // For all available options, see:
   // https://www.npmjs.com/package/@sentry/webpack-plugin#options
 
-  org: 'sciphi',
+  org: 'evgeny-pl',
   project: 'r2r-dashboard',
 
   // Only print logs for uploading source maps in CI
