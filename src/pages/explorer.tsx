@@ -51,6 +51,10 @@ import React, {
 } from 'react';
 import { useDropzone } from 'react-dropzone';
 
+import {
+  BulkActionsBar,
+  BulkAction,
+} from '@/components/explorer/BulkActionsBar';
 import { DocumentDetailsDialog } from '@/components/explorer/DocumentDetailsDialog';
 import { ExplorerSidebar } from '@/components/explorer/ExplorerSidebar';
 import { UrlUploadTab } from '@/components/explorer/UrlUploadTab';
@@ -2038,74 +2042,11 @@ function FileManager({
       </div>
 
       {/* Bulk Actions Toolbar */}
-      {selectedFiles.length > 0 && (
-        <div className="bg-background p-2 flex items-center justify-between border-b">
-          <div className="flex items-center space-x-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSelectedFiles([])}
-            >
-              <X className="h-4 w-4 mr-2" />
-              Deselect
-            </Button>
-            <span className="text-sm text-muted-foreground">
-              {selectedFiles.length} item
-              {selectedFiles.length !== 1 ? 's' : ''} selected
-            </span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleBulkAction('download')}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Download
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleBulkAction('extract')}
-            >
-              <Sparkles className="h-4 w-4 mr-2" />
-              Extract
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleBulkAction('copy')}
-            >
-              <Copy className="h-4 w-4 mr-2" />
-              Copy
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleBulkAction('move')}
-            >
-              <ArrowRightToLine className="h-4 w-4 mr-2" />
-              Move
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleBulkAction('createCollection')}
-            >
-              <FolderPlus className="h-4 w-4 mr-2" />
-              Create Collection
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => handleBulkAction('delete')}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete
-            </Button>
-          </div>
-        </div>
-      )}
+      <BulkActionsBar
+        selectedCount={selectedFiles.length}
+        onDeselect={() => setSelectedFiles([])}
+        onAction={(action) => handleBulkAction(action)}
+      />
 
       <CardContent className="p-0 bg-background">
         <Tabs
