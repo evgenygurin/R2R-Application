@@ -132,6 +132,7 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { useUserContext } from '@/context/UserContext';
 import useDebounce from '@/hooks/use-debounce';
+import { useBulkActions } from '@/hooks/useBulkActions';
 import { useDocumentPolling } from '@/hooks/useDocumentPolling';
 import { IngestionStatus, KGExtractionStatus } from '@/types';
 
@@ -329,6 +330,21 @@ function FileManager({
           return updated || file;
         });
       });
+    },
+  });
+
+  // Bulk actions hook
+  const {
+    isProcessing,
+    bulkDelete,
+    bulkExtract,
+    bulkMove,
+    bulkCopy,
+    bulkDownload,
+  } = useBulkActions(files, selectedFiles, {
+    onSuccess: () => {
+      setSelectedFiles([]);
+      fetchFiles();
     },
   });
 
@@ -805,97 +821,13 @@ function FileManager({
         setCreateCollectionModalOpen(true);
         break;
       case 'download':
-        handleBulkDownload();
+        bulkDownload();
         break;
       case 'extract':
-        handleBulkExtract();
+        bulkExtract();
         break;
       default:
         break;
-    }
-  };
-
-  const handleBulkCopy = async (collectionId: string) => {
-    if (selectedFiles.length === 0) return;
-
-    try {
-      const client = await getClient();
-      if (!client) {
-        throw new Error('Failed to get authenticated client');
-      }
-
-      const copyPromises = selectedFiles.map((fileId) =>
-        client.collections.addDocument({
-          id: collectionId,
-          documentId: fileId,
-        })
-      );
-
-      await Promise.all(copyPromises);
-
-      toast({
-        title: 'Success',
-        description: `${selectedFiles.length} document${selectedFiles.length !== 1 ? 's' : ''} copied successfully.`,
-      });
-
-      setCopyModalOpen(false);
-      setSelectedFiles([]);
-      fetchFiles();
-    } catch (error: any) {
-      console.error('Error copying files:', error);
-      toast({
-        title: 'Error',
-        description: error?.message || 'Failed to copy documents.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleBulkMove = async (collectionId: string) => {
-    if (selectedFiles.length === 0) return;
-
-    try {
-      const client = await getClient();
-      if (!client) {
-        throw new Error('Failed to get authenticated client');
-      }
-
-      // Add documents to target collection
-      const addPromises = selectedFiles.map((fileId) =>
-        client.collections.addDocument({
-          id: collectionId,
-          documentId: fileId,
-        })
-      );
-
-      await Promise.all(addPromises);
-
-      // If moving from a collection, remove from source collection
-      if (selectedCollectionId) {
-        const removePromises = selectedFiles.map((fileId) =>
-          client.collections.removeDocument({
-            id: selectedCollectionId,
-            documentId: fileId,
-          })
-        );
-        await Promise.all(removePromises);
-      }
-
-      toast({
-        title: 'Success',
-        description: `${selectedFiles.length} document${selectedFiles.length !== 1 ? 's' : ''} moved successfully.`,
-      });
-
-      setMoveModalOpen(false);
-      setSelectedFiles([]);
-      fetchFiles();
-    } catch (error: any) {
-      console.error('Error moving files:', error);
-      toast({
-        title: 'Error',
-        description: error?.message || 'Failed to move documents.',
-        variant: 'destructive',
-      });
     }
   };
 
@@ -1013,106 +945,6 @@ function FileManager({
       console.error('Error downloading file:', error);
       toast({
         title: 'Download Failed',
-        description: error?.message || 'An unknown error occurred',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleBulkDownload = async () => {
-    if (selectedFiles.length === 0) return;
-
-    try {
-      const client = await getClient();
-      if (!client) {
-        throw new Error('Failed to get authenticated client');
-      }
-
-      // Download files sequentially to avoid overwhelming the browser
-      for (const fileId of selectedFiles) {
-        const file = files.find((f) => f.id === fileId);
-        if (file) {
-          await handleDownload(file);
-          // Small delay between downloads
-          await new Promise((resolve) => setTimeout(resolve, 300));
-        }
-      }
-
-      toast({
-        title: 'Downloads Started',
-        description: `Downloading ${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''}...`,
-      });
-    } catch (error: any) {
-      console.error('Error downloading files:', error);
-      toast({
-        title: 'Download Failed',
-        description: error?.message || 'Failed to download files.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleBulkExtract = async () => {
-    if (selectedFiles.length === 0) return;
-
-    try {
-      const client = await getClient();
-      if (!client) {
-        throw new Error('Failed to get authenticated client');
-      }
-
-      // Filter only successfully ingested documents
-      const eligibleFiles = selectedFiles.filter((fileId) => {
-        const file = files.find((f) => f.id === fileId);
-        return file && file.ingestionStatus === IngestionStatus.SUCCESS;
-      });
-
-      if (eligibleFiles.length === 0) {
-        toast({
-          title: 'No Eligible Documents',
-          description:
-            'Only successfully ingested documents can be extracted. Please select documents with "success" ingestion status.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      // Extract documents sequentially
-      let successCount = 0;
-      let failCount = 0;
-
-      for (const fileId of eligibleFiles) {
-        try {
-          await client.documents.extract({ id: fileId });
-          successCount++;
-          // Small delay between requests
-          await new Promise((resolve) => setTimeout(resolve, 300));
-        } catch (error) {
-          console.error(`Error extracting document ${fileId}:`, error);
-          failCount++;
-        }
-      }
-
-      if (successCount > 0) {
-        toast({
-          title: 'Extraction Started',
-          description: `${successCount} document${successCount !== 1 ? 's' : ''} queued for extraction. ${failCount > 0 ? `${failCount} failed.` : 'Processing in background.'}`,
-          variant: failCount > 0 ? 'default' : 'success',
-        });
-      } else {
-        toast({
-          title: 'Extraction Failed',
-          description: 'Failed to start extraction for selected documents.',
-          variant: 'destructive',
-        });
-      }
-
-      // Deselect files after extraction
-      setSelectedFiles([]);
-    } catch (error: any) {
-      console.error('Error initiating bulk extraction:', error);
-      toast({
-        title: 'Extraction Failed',
         description: error?.message || 'An unknown error occurred',
         variant: 'destructive',
       });
@@ -2046,6 +1878,7 @@ function FileManager({
         selectedCount={selectedFiles.length}
         onDeselect={() => setSelectedFiles([])}
         onAction={(action) => handleBulkAction(action)}
+        isProcessing={isProcessing}
       />
 
       <CardContent className="p-0 bg-background">
@@ -3577,7 +3410,17 @@ function FileManager({
             >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={deleteFiles}>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (selectedFiles.length > 0) {
+                  await bulkDelete();
+                  setDeleteModalOpen(false);
+                } else {
+                  deleteFiles();
+                }
+              }}
+            >
               Delete
             </Button>
           </DialogFooter>
@@ -3635,9 +3478,13 @@ function FileManager({
               Cancel
             </Button>
             <Button
-              onClick={() => {
+              onClick={async () => {
                 if (selectedCollectionForAction) {
-                  handleBulkMove(selectedCollectionForAction);
+                  await bulkMove(
+                    selectedCollectionForAction,
+                    selectedCollectionId
+                  );
+                  setMoveModalOpen(false);
                   setSelectedCollectionForAction(null);
                 }
               }}
@@ -3700,9 +3547,10 @@ function FileManager({
               Cancel
             </Button>
             <Button
-              onClick={() => {
+              onClick={async () => {
                 if (selectedCollectionForAction) {
-                  handleBulkCopy(selectedCollectionForAction);
+                  await bulkCopy(selectedCollectionForAction);
+                  setCopyModalOpen(false);
                   setSelectedCollectionForAction(null);
                 }
               }}
