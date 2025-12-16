@@ -99,7 +99,7 @@ export function FileManager({
     useState(false);
   const [extractConfirmModalOpen, setExtractConfirmModalOpen] = useState(false);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
-  const [activeFile, setActiveFile] = useState<DocumentResponse | null>(null);
+  const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [selectedCollectionForAction, setSelectedCollectionForAction] =
     useState<string | null>(null);
   const [newCollectionName, setNewCollectionName] = useState('');
@@ -323,7 +323,7 @@ export function FileManager({
   }, [selectedCollectionId, currentCollection]);
 
   const handleFileAction = (action: string, file: DocumentResponse) => {
-    setActiveFile(file);
+    setActiveFileId(file.id);
 
     switch (action) {
       case 'open':
@@ -489,8 +489,8 @@ export function FileManager({
       const filesToDelete =
         selectedFiles.length > 0
           ? selectedFiles
-          : activeFile
-            ? [activeFile.id]
+          : activeFileId
+            ? [activeFileId]
             : [];
 
       await Promise.all(
@@ -512,7 +512,7 @@ export function FileManager({
       setFiles(response?.results || []);
 
       setSelectedFiles([]);
-      setActiveFile(null);
+      setActiveFileId(null);
       setDeleteModalOpen(false);
     } catch (error: any) {
       console.error('Error deleting files:', error);
@@ -692,26 +692,27 @@ export function FileManager({
         newFileName={newFileName}
         onRenameClose={() => {
           setRenameModalOpen(false);
-          setActiveFile(null);
+          setActiveFileId(null);
           setNewFileName('');
         }}
         onRenameConfirm={(newName) => {
-          if (!activeFile) return;
+          if (!activeFileId) return;
           setFiles((prev) =>
             prev.map((file) =>
-              file.id === activeFile.id ? { ...file, title: newName } : file
+              file.id === activeFileId ? { ...file, title: newName } : file
             )
           );
           setRenameModalOpen(false);
-          setActiveFile(null);
+          setActiveFileId(null);
           setNewFileName('');
         }}
         deleteModalOpen={deleteModalOpen}
-        activeFile={activeFile}
+        activeFileId={activeFileId}
+        files={files}
         selectedFilesCount={selectedFiles.length}
         onDeleteClose={() => {
           setDeleteModalOpen(false);
-          setActiveFile(null);
+          setActiveFileId(null);
         }}
         onDeleteConfirm={async () => {
           if (selectedFiles.length > 0) {
@@ -756,7 +757,7 @@ export function FileManager({
         previewModalOpen={previewModalOpen}
         onPreviewClose={() => {
           setPreviewModalOpen(false);
-          setActiveFile(null);
+          setActiveFileId(null);
         }}
       />
 

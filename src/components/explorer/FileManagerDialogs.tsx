@@ -10,7 +10,6 @@ import { DocumentDetailsDialog } from '@/components/explorer/DocumentDetailsDial
 import { RenameDocumentDialog } from '@/components/explorer/RenameDocumentDialog';
 import { UploadConfigForm } from '@/components/explorer/UploadConfigForm';
 import { UploadDocumentsDialog } from '@/components/explorer/UploadDocumentsDialog';
-import { UploadQuality } from '@/types/explorer';
 
 /**
  * FileManagerDialogs - Контейнер всех модальных окон File Manager
@@ -62,7 +61,8 @@ interface FileManagerDialogsProps {
 
   // Delete Dialog
   deleteModalOpen: boolean;
-  activeFile: DocumentResponse | null;
+  activeFileId: string | null;
+  files: DocumentResponse[];
   selectedFilesCount: number;
   onDeleteClose: () => void;
   onDeleteConfirm: () => void;
@@ -117,7 +117,8 @@ export function FileManagerDialogs({
   onRenameClose,
   onRenameConfirm,
   deleteModalOpen,
-  activeFile,
+  activeFileId,
+  files,
   selectedFilesCount,
   onDeleteClose,
   onDeleteConfirm,
@@ -136,6 +137,11 @@ export function FileManagerDialogs({
   previewModalOpen,
   onPreviewClose,
 }: FileManagerDialogsProps) {
+  // Получаем актуальный документ из files по activeFileId
+  // Это гарантирует real-time обновление статусов в модалках
+  const activeFile =
+    activeFileId !== null ? files.find((f) => f.id === activeFileId) : null;
+
   return (
     <>
       {/* Upload Modal */}
