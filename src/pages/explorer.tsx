@@ -1,6 +1,5 @@
 'use client';
 
-import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowUpDown,
@@ -13,7 +12,6 @@ import {
   Download,
   Edit,
   Eye,
-  File,
   FileText,
   Filter,
   Folder,
@@ -135,17 +133,14 @@ import { useBulkActions } from '@/hooks/useBulkActions';
 import { useDocumentPolling } from '@/hooks/useDocumentPolling';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { useUnifiedSearch, SearchResultItem } from '@/hooks/useUnifiedSearch';
+import {
+  formatFileSize,
+  formatDateLocal,
+  getFileIcon,
+  getStatusBadge,
+} from '@/lib/explorer-utils';
 import { IngestionStatus, KGExtractionStatus } from '@/types';
 import { UploadQuality } from '@/types/explorer';
-
-// Format file size helper
-function formatFileSize(bytes: number | undefined): string {
-  if (!bytes || bytes === 0) return '-';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
-}
 
 // File Manager Component
 function FileManager({
@@ -570,27 +565,6 @@ function FileManager({
     }
   };
 
-  const getFileIcon = (doc: DocumentResponse) => {
-    const type = doc.documentType?.toLowerCase() || '';
-    if (type.includes('pdf')) {
-      return <FileText className="h-5 w-5 text-red-500" />;
-    }
-    if (
-      type.includes('image') ||
-      type.includes('jpg') ||
-      type.includes('png')
-    ) {
-      return <FileText className="h-5 w-5 text-green-500" />;
-    }
-    return <File className="h-5 w-5 text-gray-500" />;
-  };
-
-  const formatDateLocal = (date: Date | string | undefined) => {
-    if (!date) return '-';
-    const dateObj = date instanceof Date ? date : new Date(date);
-    return format(dateObj, 'MMM d, yyyy');
-  };
-
   const handleDownload = async (file: DocumentResponse) => {
     try {
       const client = await getClient();
@@ -630,272 +604,6 @@ function FileManager({
       }
       return { key, direction: 'asc' };
     });
-  };
-
-  const getStatusBadge = (
-    status: string | undefined,
-    type: 'ingestion' | 'extraction'
-  ) => {
-    if (!status) return null;
-
-    let variant: 'default' | 'destructive' | 'secondary' | 'outline' =
-      'secondary';
-
-    // Normalize status to lowercase for comparison
-    const normalizedStatus = status.toLowerCase();
-
-    if (type === 'ingestion') {
-      // Check for success
-      if (
-        normalizedStatus === IngestionStatus.SUCCESS.toLowerCase() ||
-        normalizedStatus === 'success'
-      ) {
-        variant = 'default';
-      }
-      // Check for failed
-      else if (
-        normalizedStatus === IngestionStatus.FAILED.toLowerCase() ||
-        normalizedStatus === 'failed'
-      ) {
-        variant = 'destructive';
-      }
-      // Check for pending/intermediate statuses (including enriched/enriching)
-      else if (
-        normalizedStatus === IngestionStatus.PENDING.toLowerCase() ||
-        normalizedStatus === IngestionStatus.PARSING.toLowerCase() ||
-        normalizedStatus === IngestionStatus.EXTRACTING.toLowerCase() ||
-        normalizedStatus === IngestionStatus.CHUNKING.toLowerCase() ||
-        normalizedStatus === IngestionStatus.EMBEDDING.toLowerCase() ||
-        normalizedStatus === IngestionStatus.AUGMENTING.toLowerCase() ||
-        normalizedStatus === IngestionStatus.STORING.toLowerCase() ||
-        normalizedStatus === IngestionStatus.ENRICHING.toLowerCase() ||
-        normalizedStatus === 'enriched' || // Handle "enriched" as well
-        normalizedStatus === 'parsing' ||
-        normalizedStatus === 'extracting' ||
-        normalizedStatus === 'chunking' ||
-        normalizedStatus === 'embedding' ||
-        normalizedStatus === 'augmenting' ||
-        normalizedStatus === 'storing' ||
-        normalizedStatus === 'enriching' ||
-        normalizedStatus === 'pending'
-      ) {
-        variant = 'secondary';
-      }
-      // Default to secondary for unknown statuses
-      else {
-        variant = 'secondary';
-      }
-    } else {
-      // Check for success
-      if (
-        normalizedStatus === KGExtractionStatus.SUCCESS.toLowerCase() ||
-        normalizedStatus === 'success'
-      ) {
-        variant = 'default';
-      }
-      // Check for failed
-      else if (
-        normalizedStatus === KGExtractionStatus.FAILED.toLowerCase() ||
-        normalizedStatus === 'failed'
-      ) {
-        variant = 'destructive';
-      }
-      // Check for pending/processing
-      else if (
-        normalizedStatus === KGExtractionStatus.PENDING.toLowerCase() ||
-        normalizedStatus === KGExtractionStatus.PROCESSING.toLowerCase() ||
-        normalizedStatus === 'pending' ||
-        normalizedStatus === 'processing'
-      ) {
-        variant = 'secondary';
-      }
-      // Default to secondary for unknown statuses
-      else {
-        variant = 'secondary';
-      }
-    }
-
-    return <Badge variant={variant}>{status}</Badge>;
-  };
-
-  // Helper: Upload a single file to R2R API (non-blocking)
-  const uploadSingleFile = async (
-    file: File,
-    baseUrl: string,
-    accessToken: string,
-    metadata: Record<string, any>,
-    collectionsToUse: string[],
-    ingestionMode: string,
-    abortSignal: AbortSignal
-  ): Promise<{ success: boolean; documentId?: string; error?: string }> => {
-    // Extract only filename without path
-    const getFileNameOnly = (filePath: string): string => {
-      const parts = filePath.split(/[/\\]/);
-      return parts[parts.length - 1] || filePath;
-    };
-    const fileNameOnly = getFileNameOnly(file.name);
-
-    // Build final metadata
-    const fileMetadata: Record<string, any> = {
-      title: fileNameOnly,
-      ...metadata,
-    };
-
-    // Create FormData
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('ingestion_mode', ingestionMode);
-    // CRITICAL: Enable async processing so server doesn't block
-    formData.append('run_with_orchestration', 'true');
-
-    if (Object.keys(fileMetadata).length > 0) {
-      formData.append('metadata', JSON.stringify(fileMetadata));
-    }
-
-    if (collectionsToUse.length > 0) {
-      formData.append('collection_ids', JSON.stringify(collectionsToUse));
-    }
-
-    try {
-      // Create timeout controller (5 minutes for large files with hi-res processing)
-      const timeoutId = setTimeout(() => {
-        console.warn(`Upload timeout for file - R2R may still be processing`);
-      }, 300000); // 5 min warning
-
-      console.log(`📤 Starting upload: ${file.name} (${file.size} bytes)`);
-
-      const response = await fetch(`${baseUrl}/v3/documents`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: formData,
-        signal: abortSignal,
-      });
-
-      clearTimeout(timeoutId);
-      console.log(`📥 Response received for: ${file.name}`);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { detail: errorText };
-        }
-
-        // Handle 409 Conflict - document already exists
-        if (response.status === 409) {
-          const errorMessage = errorData?.detail || JSON.stringify(errorData);
-          const uuidMatch = errorMessage.match(
-            /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i
-          );
-
-          if (uuidMatch) {
-            // Delete existing and retry
-            const existingDocId = uuidMatch[1];
-            await fetch(`${baseUrl}/v3/documents/${existingDocId}`, {
-              method: 'DELETE',
-              headers: { Authorization: `Bearer ${accessToken}` },
-            });
-
-            // Retry upload
-            const retryResponse = await fetch(`${baseUrl}/v3/documents`, {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${accessToken}` },
-              body: formData,
-              signal: abortSignal,
-            });
-
-            if (retryResponse.ok) {
-              const result = await retryResponse.json();
-              const documentId =
-                result?.results?.id ||
-                result?.results?.document_id ||
-                result?.id;
-              return { success: true, documentId };
-            }
-          }
-          return {
-            success: false,
-            error: `Document already exists: ${errorMessage}`,
-          };
-        }
-
-        return {
-          success: false,
-          error: `HTTP ${response.status}: ${errorData?.detail || errorText}`,
-        };
-      }
-
-      const result = await response.json();
-      const documentId =
-        result?.results?.id || result?.results?.document_id || result?.id;
-
-      return { success: true, documentId };
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        return { success: false, error: 'Upload cancelled' };
-      }
-      return { success: false, error: error.message || 'Unknown error' };
-    }
-  };
-
-  // Helper: Run post-upload tasks in background (collection assignment, verification)
-  const runPostUploadTasks = async (
-    documentId: string,
-    collectionsToUse: string[],
-    baseUrl: string,
-    accessToken: string
-  ) => {
-    // All tasks run in background - fire and forget
-    // 1. Add to collections (with retry)
-    if (collectionsToUse.length > 0) {
-      for (const collectionId of collectionsToUse) {
-        let retries = 3;
-        while (retries > 0) {
-          try {
-            const addResponse = await fetch(
-              `${baseUrl}/v3/collections/${collectionId}/documents/${documentId}`,
-              {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${accessToken}` },
-              }
-            );
-            if (addResponse.ok || addResponse.status === 409) {
-              console.log(
-                `✅ Document ${documentId} added to collection ${collectionId}`
-              );
-              break;
-            }
-          } catch {
-            // Ignore errors in background
-          }
-          retries--;
-          if (retries > 0) {
-            await new Promise((r) => setTimeout(r, 1000));
-          }
-        }
-      }
-    }
-
-    // 2. Brief verification (optional, non-blocking)
-    try {
-      const verifyResponse = await fetch(
-        `${baseUrl}/v3/documents/${documentId}`,
-        {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }
-      );
-      if (verifyResponse.ok) {
-        const data = await verifyResponse.json();
-        console.log(`✅ Document ${documentId} verified:`, data?.results?.id);
-      }
-    } catch {
-      // Ignore verification errors
-    }
   };
 
   // Dropzone configuration
