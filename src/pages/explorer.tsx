@@ -54,18 +54,13 @@ import {
   BulkAction,
 } from '@/components/explorer/BulkActionsBar';
 import { DocumentDetailsDialog } from '@/components/explorer/DocumentDetailsDialog';
+import { ExplorerBreadcrumb } from '@/components/explorer/ExplorerBreadcrumb';
 import { ExplorerSidebar } from '@/components/explorer/ExplorerSidebar';
+import { SearchBar } from '@/components/explorer/SearchBar';
+import { StatusFilter } from '@/components/explorer/StatusFilter';
 import { UrlUploadTab } from '@/components/explorer/UrlUploadTab';
 import { Navbar } from '@/components/shared/NavBar';
 import { Badge } from '@/components/ui/badge';
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -688,51 +683,10 @@ function FileManager({
           <div className="flex items-center gap-2 text-sm min-w-0 flex-1 overflow-hidden">
             <SidebarTrigger className="shrink-0 h-7 w-7" />
             <Separator orientation="vertical" className="h-4 shrink-0" />
-            <Breadcrumb className="flex-1">
-              <BreadcrumbList>
-                {breadcrumbPath.map((path, index) => (
-                  <React.Fragment key={index}>
-                    <BreadcrumbItem>
-                      {index === breadcrumbPath.length - 1 ? (
-                        <BreadcrumbPage className="flex items-center gap-2">
-                          {index === 0 ? (
-                            <FileText className="h-4 w-4 shrink-0" />
-                          ) : (
-                            <>
-                              <Folder className="h-4 w-4 shrink-0" />
-                              <span className="truncate max-w-[200px]">
-                                {path}
-                              </span>
-                            </>
-                          )}
-                        </BreadcrumbPage>
-                      ) : (
-                        <BreadcrumbLink
-                          onClick={() => navigateToBreadcrumb(index)}
-                          className="flex items-center gap-2 cursor-pointer"
-                        >
-                          {index === 0 ? (
-                            <FileText className="h-4 w-4 shrink-0" />
-                          ) : (
-                            <>
-                              <Folder className="h-4 w-4 shrink-0" />
-                              <span className="truncate max-w-[200px]">
-                                {path}
-                              </span>
-                            </>
-                          )}
-                        </BreadcrumbLink>
-                      )}
-                    </BreadcrumbItem>
-                    {index < breadcrumbPath.length - 1 && (
-                      <BreadcrumbSeparator>
-                        <ChevronRight className="h-4 w-4" />
-                      </BreadcrumbSeparator>
-                    )}
-                  </React.Fragment>
-                ))}
-              </BreadcrumbList>
-            </Breadcrumb>
+            <ExplorerBreadcrumb
+              pathSegments={breadcrumbPath}
+              onNavigate={navigateToBreadcrumb}
+            />
           </div>
 
           <div className="flex items-center gap-2 ml-auto mr-4">
@@ -758,200 +712,26 @@ function FileManager({
                 </Tooltip>
               </TooltipProvider>
             )}
-            <div className="relative w-64">
-              <Input
-                type="text"
-                placeholder="Search files..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onFocus={() => setIsSearchFocused(true)}
-                onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
-                className={`pl-3 ${searchQuery.length > 0 ? 'pr-20' : 'pr-9'} py-1.5 h-9 text-sm rounded-lg`}
-              />
-              {searchQuery.length > 0 && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                  <AnimatePresence mode="popLayout">
-                    <motion.button
-                      key="clear"
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSearchQuery('');
-                        setIsSearchFocused(false);
-                        // Switch to "All Documents" when clearing search
-                        onCollectionSelect(null);
-                      }}
-                      className="h-4 w-4 flex items-center justify-center rounded hover:bg-muted transition-colors"
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.8 }}
-                      transition={{ duration: 0.15 }}
-                      aria-label="Clear search"
-                    >
-                      <X className="w-3 h-3 text-muted-foreground hover:text-foreground" />
-                    </motion.button>
-                    <motion.div
-                      key="send"
-                      initial={{ y: -20, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      exit={{ y: 20, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      <Send className="w-4 h-4 text-muted-foreground" />
-                    </motion.div>
-                  </AnimatePresence>
-                </div>
-              )}
-
-              {/* Search Results Dropdown */}
-              <AnimatePresence>
-                {isSearchFocused &&
-                  (searchResults.length > 0 || isSearching) && (
-                    <motion.div
-                      className="absolute top-full left-0 right-0 mt-1 border rounded-md shadow-sm overflow-hidden bg-background z-50 max-h-[400px] overflow-y-auto"
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      {isSearching ? (
-                        <div className="px-3 py-4 flex items-center justify-center">
-                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground mr-2" />
-                          <span className="text-sm text-muted-foreground">
-                            Searching...
-                          </span>
-                        </div>
-                      ) : (
-                        <>
-                          <ul>
-                            {searchResults.map((result: SearchResultItem) => {
-                              // Get icon and color for each entity type
-                              const getEntityIcon = (type: string) => {
-                                switch (type) {
-                                  case 'document':
-                                    return (
-                                      <FileText className="h-4 w-4 flex-shrink-0" />
-                                    );
-                                  case 'collection':
-                                    return (
-                                      <Folder className="h-4 w-4 flex-shrink-0" />
-                                    );
-                                  case 'entity':
-                                    return (
-                                      <Network className="h-4 w-4 flex-shrink-0" />
-                                    );
-                                  case 'relationship':
-                                    return (
-                                      <Link2 className="h-4 w-4 flex-shrink-0" />
-                                    );
-                                  case 'community':
-                                    return (
-                                      <Users className="h-4 w-4 flex-shrink-0" />
-                                    );
-                                  default:
-                                    return (
-                                      <FileText className="h-4 w-4 flex-shrink-0" />
-                                    );
-                                }
-                              };
-
-                              const getEntityColor = (type: string) => {
-                                switch (type) {
-                                  case 'document':
-                                    return 'text-blue-500';
-                                  case 'collection':
-                                    return 'text-purple-500';
-                                  case 'entity':
-                                    return 'text-green-500';
-                                  case 'relationship':
-                                    return 'text-orange-500';
-                                  case 'community':
-                                    return 'text-pink-500';
-                                  default:
-                                    return 'text-muted-foreground';
-                                }
-                              };
-
-                              const getTypeLabel = (type: string) => {
-                                switch (type) {
-                                  case 'document':
-                                    return 'Document';
-                                  case 'collection':
-                                    return 'Collection';
-                                  case 'entity':
-                                    return 'Entity';
-                                  case 'relationship':
-                                    return 'Relationship';
-                                  case 'community':
-                                    return 'Community';
-                                  default:
-                                    return 'Item';
-                                }
-                              };
-
-                              return (
-                                <motion.li
-                                  key={`${result.type}-${result.id}`}
-                                  className="px-3 py-2.5 flex items-center justify-between hover:bg-muted cursor-pointer group"
-                                  initial={{ opacity: 0, y: 10 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  transition={{ duration: 0.15 }}
-                                  onClick={() => {
-                                    if (result.type === 'document') {
-                                      setSearchQuery(result.title);
-                                    } else if (result.type === 'collection') {
-                                      onCollectionSelect(result.id);
-                                      setSearchQuery('');
-                                    }
-                                    setIsSearchFocused(false);
-                                  }}
-                                >
-                                  <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                                    <div
-                                      className={getEntityColor(result.type)}
-                                    >
-                                      {getEntityIcon(result.type)}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-sm font-medium truncate">
-                                          {result.title}
-                                        </span>
-                                        <Badge
-                                          variant="outline"
-                                          className="text-xs px-1.5 py-0 h-5"
-                                        >
-                                          {getTypeLabel(result.type)}
-                                        </Badge>
-                                      </div>
-                                      {result.description && (
-                                        <p className="text-xs text-muted-foreground truncate mt-0.5">
-                                          {result.description}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                  {result.metadata?.score && (
-                                    <div className="ml-2 text-xs text-muted-foreground">
-                                      {(result.metadata.score * 100).toFixed(0)}
-                                      %
-                                    </div>
-                                  )}
-                                </motion.li>
-                              );
-                            })}
-                          </ul>
-                          {searchResults.length >= 8 && (
-                            <div className="px-3 py-2 border-t text-xs text-muted-foreground text-center bg-muted/30">
-                              Showing top {searchResults.length} results
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </motion.div>
-                  )}
-              </AnimatePresence>
-            </div>
+            <SearchBar
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setIsSearchFocused(false)}
+              isFocused={isSearchFocused}
+              searchResults={searchResults}
+              isSearching={isSearching}
+              onDocumentClick={(title) => setSearchQuery(title)}
+              onCollectionClick={(id) => {
+                onCollectionSelect(id);
+                setSearchQuery('');
+                setIsSearchFocused(false);
+              }}
+              onClear={() => {
+                setSearchQuery('');
+                setIsSearchFocused(false);
+                onCollectionSelect(null);
+              }}
+            />
           </div>
 
           <div className="flex items-center gap-2">
@@ -1071,199 +851,45 @@ function FileManager({
                     <TableHead className="w-[150px] !px-2 !py-1">
                       <div className="flex items-center gap-2">
                         <span>Ingestion</span>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 relative"
-                            >
-                              <Filter
-                                className={`h-4 w-4 ${
-                                  filters.ingestionStatus.length > 0
-                                    ? 'text-primary'
-                                    : 'opacity-50'
-                                }`}
-                              />
-                              {filters.ingestionStatus.length > 0 && (
-                                <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-[10px] text-primary-foreground flex items-center justify-center">
-                                  {filters.ingestionStatus.length}
-                                </span>
-                              )}
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            <div className="p-2">
-                              <div className="text-xs font-semibold mb-2 px-2">
-                                Ingestion Status
-                              </div>
-                              <div className="space-y-1">
-                                {DEFAULT_INGESTION_STATUSES.map((status) => (
-                                  <div
-                                    key={status}
-                                    className="flex items-center space-x-2 px-2 py-1.5 rounded-sm hover:bg-accent cursor-pointer"
-                                    onClick={() => {
-                                      setFilters((prev) => {
-                                        const current = prev.ingestionStatus;
-                                        const isSelected =
-                                          current.includes(status);
-                                        return {
-                                          ...prev,
-                                          ingestionStatus: isSelected
-                                            ? current.filter(
-                                                (s) => s !== status
-                                              )
-                                            : [...current, status],
-                                        };
-                                      });
-                                    }}
-                                  >
-                                    <Checkbox
-                                      checked={filters.ingestionStatus.includes(
-                                        status
-                                      )}
-                                      onCheckedChange={() => {
-                                        setFilters((prev) => {
-                                          const current = prev.ingestionStatus;
-                                          const isSelected =
-                                            current.includes(status);
-                                          return {
-                                            ...prev,
-                                            ingestionStatus: isSelected
-                                              ? current.filter(
-                                                  (s) => s !== status
-                                                )
-                                              : [...current, status],
-                                          };
-                                        });
-                                      }}
-                                    />
-                                    <label className="text-sm cursor-pointer flex-1">
-                                      {status}
-                                    </label>
-                                  </div>
-                                ))}
-                              </div>
-                              {filters.ingestionStatus.length > 0 && (
-                                <div className="mt-2 pt-2 border-t">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="w-full h-7 text-xs"
-                                    onClick={() => {
-                                      setFilters((prev) => ({
-                                        ...prev,
-                                        ingestionStatus: [],
-                                      }));
-                                    }}
-                                  >
-                                    <X className="h-3 w-3 mr-1" />
-                                    Clear
-                                  </Button>
-                                </div>
-                              )}
-                            </div>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <StatusFilter
+                          title="Ingestion Status"
+                          availableStatuses={DEFAULT_INGESTION_STATUSES}
+                          selectedStatuses={filters.ingestionStatus}
+                          onStatusChange={(statuses) =>
+                            setFilters((prev) => ({
+                              ...prev,
+                              ingestionStatus: statuses,
+                            }))
+                          }
+                          onClear={() =>
+                            setFilters((prev) => ({
+                              ...prev,
+                              ingestionStatus: [],
+                            }))
+                          }
+                        />
                       </div>
                     </TableHead>
                     <TableHead className="w-[150px] !px-2 !py-1">
                       <div className="flex items-center gap-2">
                         <span>Extraction</span>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 relative"
-                            >
-                              <Filter
-                                className={`h-4 w-4 ${
-                                  filters.extractionStatus.length > 0
-                                    ? 'text-primary'
-                                    : 'opacity-50'
-                                }`}
-                              />
-                              {filters.extractionStatus.length > 0 && (
-                                <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-[10px] text-primary-foreground flex items-center justify-center">
-                                  {filters.extractionStatus.length}
-                                </span>
-                              )}
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            <div className="p-2">
-                              <div className="text-xs font-semibold mb-2 px-2">
-                                Extraction Status
-                              </div>
-                              <div className="space-y-1">
-                                {DEFAULT_EXTRACTION_STATUSES.map((status) => (
-                                  <div
-                                    key={status}
-                                    className="flex items-center space-x-2 px-2 py-1.5 rounded-sm hover:bg-accent cursor-pointer"
-                                    onClick={() => {
-                                      setFilters((prev) => {
-                                        const current = prev.extractionStatus;
-                                        const isSelected =
-                                          current.includes(status);
-                                        return {
-                                          ...prev,
-                                          extractionStatus: isSelected
-                                            ? current.filter(
-                                                (s) => s !== status
-                                              )
-                                            : [...current, status],
-                                        };
-                                      });
-                                    }}
-                                  >
-                                    <Checkbox
-                                      checked={filters.extractionStatus.includes(
-                                        status
-                                      )}
-                                      onCheckedChange={() => {
-                                        setFilters((prev) => {
-                                          const current = prev.extractionStatus;
-                                          const isSelected =
-                                            current.includes(status);
-                                          return {
-                                            ...prev,
-                                            extractionStatus: isSelected
-                                              ? current.filter(
-                                                  (s) => s !== status
-                                                )
-                                              : [...current, status],
-                                          };
-                                        });
-                                      }}
-                                    />
-                                    <label className="text-sm cursor-pointer flex-1">
-                                      {status}
-                                    </label>
-                                  </div>
-                                ))}
-                              </div>
-                              {filters.extractionStatus.length > 0 && (
-                                <div className="mt-2 pt-2 border-t">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="w-full h-7 text-xs"
-                                    onClick={() => {
-                                      setFilters((prev) => ({
-                                        ...prev,
-                                        extractionStatus: [],
-                                      }));
-                                    }}
-                                  >
-                                    <X className="h-3 w-3 mr-1" />
-                                    Clear
-                                  </Button>
-                                </div>
-                              )}
-                            </div>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <StatusFilter
+                          title="Extraction Status"
+                          availableStatuses={DEFAULT_EXTRACTION_STATUSES}
+                          selectedStatuses={filters.extractionStatus}
+                          onStatusChange={(statuses) =>
+                            setFilters((prev) => ({
+                              ...prev,
+                              extractionStatus: statuses,
+                            }))
+                          }
+                          onClear={() =>
+                            setFilters((prev) => ({
+                              ...prev,
+                              extractionStatus: [],
+                            }))
+                          }
+                        />
                       </div>
                     </TableHead>
                     <TableHead className="w-[80px]">Actions</TableHead>
