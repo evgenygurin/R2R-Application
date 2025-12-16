@@ -24,7 +24,7 @@ import KnowledgeGraph from '@/components/knowledgeGraph';
 import KnowledgeGraphD3 from '@/components/knowledgeGraphD3';
 import Layout from '@/components/Layout';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
@@ -585,8 +585,7 @@ const CollectionIdPage: React.FC = () => {
               setIsCollectionDialogOpen(true);
             }}
             className={`pl-4 pr-4 py-2 px-4`}
-            color="filled"
-            shape="rounded"
+            variant="default"
             style={{ zIndex: 20 }}
           >
             <Settings className="mr-2 h-4 w-4 mt-1" />
@@ -611,10 +610,8 @@ const CollectionIdPage: React.FC = () => {
           setSelectedDocumentId(doc.id);
           setIsDocumentInfoDialogOpen(true);
         }}
-        color="text_gray"
-        shape="slim"
         disabled={doc.ingestionStatus !== IngestionStatus.SUCCESS}
-        tooltip="View Document Info"
+        title="View Document Info"
       >
         <FileSearch2 className="h-6 w-6" />
       </Button>
