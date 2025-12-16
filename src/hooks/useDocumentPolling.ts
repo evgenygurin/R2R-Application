@@ -1,5 +1,5 @@
 import { DocumentResponse } from 'r2r-js';
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 
 import { useUserContext } from '@/context/UserContext';
 import logger from '@/lib/logger';
@@ -48,7 +48,10 @@ export function useDocumentPolling(
   const { getClient } = useUserContext();
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const retryCountRef = useRef(0);
-  const isPollingRef = useRef(false);
+  const isFetchingRef = useRef(false);
+
+  // ИСПРАВЛЕНИЕ: Используем state вместо ref для реактивности
+  const [isPolling, setIsPolling] = useState(false);
 
   /**
    * Проверяет нужен ли polling для документа
@@ -71,13 +74,25 @@ export function useDocumentPolling(
   );
 
   /**
+   * Останавливает polling
+   */
+  const stopPolling = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+      setIsPolling(false); // ИСПРАВЛЕНИЕ: обновляем state
+      logger.info('Stopped document polling');
+    }
+  }, []);
+
+  /**
    * Получает обновленные данные документов
    */
   const fetchDocumentUpdates = useCallback(async () => {
-    if (documentIds.length === 0 || isPollingRef.current) return;
+    if (documentIds.length === 0 || isFetchingRef.current) return;
 
     try {
-      isPollingRef.current = true;
+      isFetchingRef.current = true;
       const client = await getClient();
       if (!client) {
         throw new Error('Failed to get authenticated client');
@@ -122,9 +137,17 @@ export function useDocumentPolling(
         stopPolling();
       }
     } finally {
-      isPollingRef.current = false;
+      isFetchingRef.current = false;
     }
-  }, [documentIds, getClient, needsPolling, onUpdate, onlyPending, maxRetries]);
+  }, [
+    documentIds,
+    getClient,
+    needsPolling,
+    onUpdate,
+    onlyPending,
+    maxRetries,
+    stopPolling,
+  ]);
 
   /**
    * Запускает polling
@@ -137,23 +160,14 @@ export function useDocumentPolling(
       documentCount: documentIds.length,
     });
 
+    setIsPolling(true); // ИСПРАВЛЕНИЕ: обновляем state
+
     // Первый запрос сразу
     fetchDocumentUpdates();
 
     // Затем по интервалу
     intervalRef.current = setInterval(fetchDocumentUpdates, interval);
   }, [interval, documentIds.length, fetchDocumentUpdates]);
-
-  /**
-   * Останавливает polling
-   */
-  const stopPolling = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-      logger.info('Stopped document polling');
-    }
-  }, []);
 
   /**
    * Перезапускает polling (полезно при изменении списка документов)
@@ -171,17 +185,19 @@ export function useDocumentPolling(
   useEffect(() => {
     if (documentIds.length > 0) {
       startPolling();
+    } else {
+      stopPolling();
     }
 
     return () => {
       stopPolling();
     };
-  }, [documentIds, startPolling, stopPolling]);
+  }, [documentIds.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     startPolling,
     stopPolling,
     restartPolling,
-    isPolling: intervalRef.current !== null,
+    isPolling, // Теперь реактивен!
   };
 }

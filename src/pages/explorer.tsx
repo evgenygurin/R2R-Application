@@ -1,6 +1,6 @@
 'use client';
 
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowUpDown,
@@ -51,8 +51,8 @@ import React, {
 } from 'react';
 import { useDropzone } from 'react-dropzone';
 
-import { CollectionMenu } from '@/components/explorer/CollectionMenu';
 import { DocumentDetailsDialog } from '@/components/explorer/DocumentDetailsDialog';
+import { ExplorerSidebar } from '@/components/explorer/ExplorerSidebar';
 import { UrlUploadTab } from '@/components/explorer/UrlUploadTab';
 import { Navbar } from '@/components/shared/NavBar';
 import { Badge } from '@/components/ui/badge';
@@ -67,11 +67,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
 import {
   Command,
   CommandGroup,
@@ -111,19 +106,8 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
   SidebarInset,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarMenuSub,
   SidebarProvider,
-  SidebarRail,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import {
@@ -135,7 +119,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Tooltip,
   TooltipContent,
@@ -155,174 +138,6 @@ function formatFileSize(bytes: number | undefined): string {
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
-}
-
-// Format date helper
-function formatDateHelper(dateString: string | undefined) {
-  if (!dateString) return 'N/A';
-  try {
-    const date = parseISO(dateString);
-    return format(date, 'PPpp');
-  } catch {
-    return dateString;
-  }
-}
-
-// File Tree component
-function Tree({ item, level = 0 }: { item: string | any[]; level?: number }) {
-  const [name, ...items] = Array.isArray(item) ? item : [item];
-
-  if (!items.length) {
-    return (
-      <SidebarMenuButton
-        isActive={name === 'button.tsx'}
-        className="data-[active=true]:bg-transparent"
-      >
-        <File />
-        {name}
-      </SidebarMenuButton>
-    );
-  }
-
-  return (
-    <SidebarMenuItem>
-      <Collapsible
-        className="group/collapsible [&[data-state=open]>button>svg:first-child]:rotate-90"
-        defaultOpen={level < 2}
-      >
-        <CollapsibleTrigger asChild>
-          <SidebarMenuButton>
-            <ChevronRight className="transition-transform" />
-            <Folder />
-            {name}
-          </SidebarMenuButton>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <SidebarMenuSub>
-            {items.map((subItem, index) => (
-              <Tree key={index} item={subItem} level={level + 1} />
-            ))}
-          </SidebarMenuSub>
-        </CollapsibleContent>
-      </Collapsible>
-    </SidebarMenuItem>
-  );
-}
-
-// App Sidebar
-function AppSidebar({
-  selectedCollectionId,
-  onCollectionSelect,
-  ...props
-}: React.ComponentProps<typeof Sidebar> & {
-  selectedCollectionId: string | null;
-  onCollectionSelect: (collectionId: string | null) => void;
-}) {
-  const { getClient, authState } = useUserContext();
-  const [collections, setCollections] = useState<CollectionResponse[]>([]);
-
-  useEffect(() => {
-    if (!authState.isAuthenticated) return;
-
-    const fetchCollections = async () => {
-      try {
-        const client = await getClient();
-        if (!client) return;
-
-        const response = await client.collections.list({
-          limit: 100,
-          offset: 0,
-        });
-        setCollections(response?.results || []);
-      } catch (error) {
-        console.error('Error fetching collections:', error);
-      }
-    };
-
-    fetchCollections();
-  }, [authState.isAuthenticated, getClient]);
-
-  return (
-    <Sidebar {...props}>
-      <SidebarHeader className="!pt-1">
-        <div className="px-6 py-2">
-          <h2 className="text-lg font-semibold mb-2">Collections</h2>
-        </div>
-      </SidebarHeader>
-
-      <SidebarContent className="!pt-1">
-        <SidebarGroup className="!pt-1 !pb-0.5">
-          <SidebarGroupLabel>Files</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={selectedCollectionId === null}
-                  onClick={() => onCollectionSelect(null)}
-                  title="All Documents"
-                >
-                  <FileText />
-                  All Documents
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {collections.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel>
-              Collections ({collections.length})
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {collections.map((collection) => (
-                  <SidebarMenuItem
-                    key={collection.id}
-                    className="group relative"
-                  >
-                    <SidebarMenuButton
-                      isActive={selectedCollectionId === collection.id}
-                      onClick={() => onCollectionSelect(collection.id)}
-                      title={collection.name || collection.id}
-                    >
-                      <Folder />
-                      <span className="truncate">
-                        {collection.name || collection.id}
-                      </span>
-                    </SidebarMenuButton>
-                    <div className="absolute right-1 top-1/2 -translate-y-1/2">
-                      <CollectionMenu
-                        collection={collection}
-                        onCollectionUpdate={async () => {
-                          // Refresh collections after rename
-                          try {
-                            const client = await getClient();
-                            if (!client) return;
-                            const response = await client.collections.list({
-                              limit: 100,
-                              offset: 0,
-                            });
-                            setCollections(response?.results || []);
-                          } catch (error) {
-                            console.error(
-                              'Error refreshing collections:',
-                              error
-                            );
-                          }
-                        }}
-                      />
-                    </div>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-      </SidebarContent>
-      <SidebarRail />
-    </Sidebar>
-  );
 }
 
 // File Manager Component
@@ -4058,7 +3873,7 @@ export default function ExplorerPage() {
     <div className="flex flex-col min-h-screen">
       <Navbar />
       <SidebarProvider defaultOpen={true}>
-        <AppSidebar
+        <ExplorerSidebar
           collapsible="icon"
           selectedCollectionId={selectedCollectionId}
           onCollectionSelect={setSelectedCollectionId}
