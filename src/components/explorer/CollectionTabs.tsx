@@ -21,6 +21,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useUserContext } from '@/context/UserContext';
 import { useBatchFetch } from '@/hooks/useBatchFetch';
+import { useRouter } from 'next/router';
 
 interface CollectionTabsProps {
   selectedCollectionId: string | null;
@@ -46,10 +47,57 @@ export function CollectionTabs({
 }: CollectionTabsProps) {
   const { getClient } = useUserContext();
   const [activeTab, setActiveTab] = useState<TabValue>('documents');
+  const router = useRouter();
 
   // Track which tabs have been loaded
   const [loadedTabs, setLoadedTabs] = useState<Set<TabValue>>(
     new Set(['documents'])
+  );
+
+  // Sync activeTab with query params
+  useEffect(() => {
+    if (!router.isReady) return;
+
+    const tabFromQuery = router.query.tab as TabValue | undefined;
+    const validTabs: TabValue[] = [
+      'documents',
+      'users',
+      'entities',
+      'relationships',
+      'communities',
+      'knowledge-graph',
+      'explore',
+    ];
+
+    if (tabFromQuery && validTabs.includes(tabFromQuery)) {
+      setActiveTab(tabFromQuery);
+    }
+  }, [router.isReady, router.query.tab]);
+
+  // Update URL when activeTab changes
+  const handleTabChange = useCallback(
+    (value: string) => {
+      const newTab = value as TabValue;
+      setActiveTab(newTab);
+
+      const query: Record<string, string> = {};
+      if (router.query.collection) {
+        query.collection = router.query.collection as string;
+      }
+      if (newTab !== 'documents') {
+        query.tab = newTab;
+      }
+
+      router.push(
+        {
+          pathname: '/explorer',
+          query,
+        },
+        undefined,
+        { shallow: true }
+      );
+    },
+    [router]
   );
 
   // Mark tab as loaded when it becomes active
@@ -176,7 +224,7 @@ export function CollectionTabs({
     <div className="flex flex-col h-full">
       <Tabs
         value={activeTab}
-        onValueChange={(value) => setActiveTab(value as TabValue)}
+        onValueChange={handleTabChange}
         className="flex flex-col flex-1"
       >
         <TabsList className="grid w-full grid-cols-7">
