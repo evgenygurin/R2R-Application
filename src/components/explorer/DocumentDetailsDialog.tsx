@@ -467,6 +467,15 @@ export function DocumentDetailsDialog({
     }
   };
 
+  // Вычисляем реальный extractionStatus на основе наличия entities/relationships
+  // Если есть данные - значит extraction SUCCESS, независимо от статуса с бэкенда
+  const getActualExtractionStatus = (): string | undefined => {
+    if (preloadedTotals.entities > 0 || preloadedTotals.relationships > 0) {
+      return KGExtractionStatus.SUCCESS;
+    }
+    return document.extractionStatus;
+  };
+
   // Reset error and preload totals when dialog opens
   useEffect(() => {
     if (open) {
@@ -508,7 +517,7 @@ export function DocumentDetailsDialog({
             </DialogTitle>
             <div className="flex items-center gap-2 flex-shrink-0">
               {getStatusBadge(document.ingestionStatus, 'ingestion')}
-              {getStatusBadge(document.extractionStatus, 'extraction')}
+              {getStatusBadge(getActualExtractionStatus(), 'extraction')}
             </div>
           </div>
         </DialogHeader>
