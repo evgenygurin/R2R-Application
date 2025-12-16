@@ -51,7 +51,9 @@ import React, {
 } from 'react';
 import { useDropzone } from 'react-dropzone';
 
+import { CollectionMenu } from '@/components/explorer/CollectionMenu';
 import { DocumentDetailsDialog } from '@/components/explorer/DocumentDetailsDialog';
+import { UrlUploadTab } from '@/components/explorer/UrlUploadTab';
 import { Navbar } from '@/components/shared/NavBar';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -78,7 +80,6 @@ import {
 } from '@/components/ui/command';
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -98,7 +99,6 @@ import {
   Popover,
   PopoverAnchor,
   PopoverContent,
-  PopoverTrigger,
 } from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -136,7 +136,6 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { ToastAction } from '@/components/ui/toast';
 import {
   Tooltip,
   TooltipContent,
@@ -278,7 +277,10 @@ function AppSidebar({
             <SidebarGroupContent>
               <SidebarMenu>
                 {collections.map((collection) => (
-                  <SidebarMenuItem key={collection.id}>
+                  <SidebarMenuItem
+                    key={collection.id}
+                    className="group relative"
+                  >
                     <SidebarMenuButton
                       isActive={selectedCollectionId === collection.id}
                       onClick={() => onCollectionSelect(collection.id)}
@@ -289,6 +291,28 @@ function AppSidebar({
                         {collection.name || collection.id}
                       </span>
                     </SidebarMenuButton>
+                    <div className="absolute right-1 top-1/2 -translate-y-1/2">
+                      <CollectionMenu
+                        collection={collection}
+                        onCollectionUpdate={async () => {
+                          // Refresh collections after rename
+                          try {
+                            const client = await getClient();
+                            if (!client) return;
+                            const response = await client.collections.list({
+                              limit: 100,
+                              offset: 0,
+                            });
+                            setCollections(response?.results || []);
+                          } catch (error) {
+                            console.error(
+                              'Error refreshing collections:',
+                              error
+                            );
+                          }
+                        }}
+                      />
+                    </div>
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>
@@ -368,6 +392,9 @@ function FileManager({
 
   // Modals
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [uploadActiveTab, setUploadActiveTab] = useState<'file' | 'url'>(
+    'file'
+  );
   const [renameModalOpen, setRenameModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [moveModalOpen, setMoveModalOpen] = useState(false);
@@ -1368,7 +1395,187 @@ function FileManager({
     return <Badge variant={variant}>{status}</Badge>;
   };
 
-  // Real file upload handler with improved error handling and progress tracking
+  // Helper: Upload a single file to R2R API (non-blocking)
+  const uploadSingleFile = async (
+    file: File,
+    baseUrl: string,
+    accessToken: string,
+    metadata: Record<string, any>,
+    collectionsToUse: string[],
+    ingestionMode: string,
+    abortSignal: AbortSignal
+  ): Promise<{ success: boolean; documentId?: string; error?: string }> => {
+    // Extract only filename without path
+    const getFileNameOnly = (filePath: string): string => {
+      const parts = filePath.split(/[/\\]/);
+      return parts[parts.length - 1] || filePath;
+    };
+    const fileNameOnly = getFileNameOnly(file.name);
+
+    // Build final metadata
+    const fileMetadata: Record<string, any> = {
+      title: fileNameOnly,
+      ...metadata,
+    };
+
+    // Create FormData
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('ingestion_mode', ingestionMode);
+    // CRITICAL: Enable async processing so server doesn't block
+    formData.append('run_with_orchestration', 'true');
+
+    if (Object.keys(fileMetadata).length > 0) {
+      formData.append('metadata', JSON.stringify(fileMetadata));
+    }
+
+    if (collectionsToUse.length > 0) {
+      formData.append('collection_ids', JSON.stringify(collectionsToUse));
+    }
+
+    try {
+      // Create timeout controller (5 minutes for large files with hi-res processing)
+      const timeoutId = setTimeout(() => {
+        console.warn(`Upload timeout for file - R2R may still be processing`);
+      }, 300000); // 5 min warning
+
+      console.log(`📤 Starting upload: ${file.name} (${file.size} bytes)`);
+
+      const response = await fetch(`${baseUrl}/v3/documents`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: formData,
+        signal: abortSignal,
+      });
+
+      clearTimeout(timeoutId);
+      console.log(`📥 Response received for: ${file.name}`);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { detail: errorText };
+        }
+
+        // Handle 409 Conflict - document already exists
+        if (response.status === 409) {
+          const errorMessage = errorData?.detail || JSON.stringify(errorData);
+          const uuidMatch = errorMessage.match(
+            /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i
+          );
+
+          if (uuidMatch) {
+            // Delete existing and retry
+            const existingDocId = uuidMatch[1];
+            await fetch(`${baseUrl}/v3/documents/${existingDocId}`, {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${accessToken}` },
+            });
+
+            // Retry upload
+            const retryResponse = await fetch(`${baseUrl}/v3/documents`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${accessToken}` },
+              body: formData,
+              signal: abortSignal,
+            });
+
+            if (retryResponse.ok) {
+              const result = await retryResponse.json();
+              const documentId =
+                result?.results?.id ||
+                result?.results?.document_id ||
+                result?.id;
+              return { success: true, documentId };
+            }
+          }
+          return {
+            success: false,
+            error: `Document already exists: ${errorMessage}`,
+          };
+        }
+
+        return {
+          success: false,
+          error: `HTTP ${response.status}: ${errorData?.detail || errorText}`,
+        };
+      }
+
+      const result = await response.json();
+      const documentId =
+        result?.results?.id || result?.results?.document_id || result?.id;
+
+      return { success: true, documentId };
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        return { success: false, error: 'Upload cancelled' };
+      }
+      return { success: false, error: error.message || 'Unknown error' };
+    }
+  };
+
+  // Helper: Run post-upload tasks in background (collection assignment, verification)
+  const runPostUploadTasks = async (
+    documentId: string,
+    collectionsToUse: string[],
+    baseUrl: string,
+    accessToken: string
+  ) => {
+    // All tasks run in background - fire and forget
+    // 1. Add to collections (with retry)
+    if (collectionsToUse.length > 0) {
+      for (const collectionId of collectionsToUse) {
+        let retries = 3;
+        while (retries > 0) {
+          try {
+            const addResponse = await fetch(
+              `${baseUrl}/v3/collections/${collectionId}/documents/${documentId}`,
+              {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${accessToken}` },
+              }
+            );
+            if (addResponse.ok || addResponse.status === 409) {
+              console.log(
+                `✅ Document ${documentId} added to collection ${collectionId}`
+              );
+              break;
+            }
+          } catch {
+            // Ignore errors in background
+          }
+          retries--;
+          if (retries > 0) {
+            await new Promise((r) => setTimeout(r, 1000));
+          }
+        }
+      }
+    }
+
+    // 2. Brief verification (optional, non-blocking)
+    try {
+      const verifyResponse = await fetch(
+        `${baseUrl}/v3/documents/${documentId}`,
+        {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
+      if (verifyResponse.ok) {
+        const data = await verifyResponse.json();
+        console.log(`✅ Document ${documentId} verified:`, data?.results?.id);
+      }
+    } catch {
+      // Ignore verification errors
+    }
+  };
+
+  // Real file upload handler - OPTIMIZED for non-blocking UI
   const handleFileUpload = async () => {
     if (uploadFiles.length === 0 || isUploading) return;
 
@@ -1376,64 +1583,19 @@ function FileManager({
     setUploadAbortController(abortController);
     setIsUploading(true);
 
-    // CRITICAL: Save all metadata fields to uploadMetadata before upload
-    // This ensures that even if user didn't press Enter, metadata is still saved
+    // Collect metadata from fields
     const finalMetadata: Record<string, string> = { ...uploadMetadata };
-
-    // IMPORTANT: Collect metadata from metadataFields - these are the fields user is currently editing
-    // Even if user pressed Enter, we still check metadataFields as a safety net
-    console.log('Collecting metadata from metadataFields:', {
-      metadataFieldsLength: metadataFields.length,
-      metadataFields: metadataFields.map((f) => ({
-        key: f.key,
-        keyTrimmed: f.key.trim(),
-        value: f.value,
-        valueTrimmed: f.value.trim(),
-        placeholder: f.placeholder,
-        placeholderTrimmed: f.placeholder.trim(),
-        hasValue: !!f.value.trim(),
-        hasPlaceholder: !!f.placeholder.trim(),
-      })),
-    });
-
     metadataFields.forEach((field) => {
       if (field.key.trim()) {
-        // Use value if filled, otherwise use placeholder
         const valueToUse = field.value.trim() || field.placeholder.trim();
         if (valueToUse) {
           finalMetadata[field.key.trim()] = valueToUse;
-          console.log(
-            `✅ Collected metadata field from metadataFields: ${field.key.trim()} = ${valueToUse}`
-          );
-        } else {
-          console.warn(
-            `⚠️ Metadata field ${field.key.trim()} has no value or placeholder`
-          );
         }
-      } else {
-        console.warn(`⚠️ Metadata field has empty key:`, field);
       }
     });
-
-    // Update uploadMetadata with all collected metadata (for UI display)
     setUploadMetadata(finalMetadata);
 
-    console.log('Pre-upload metadata collection:', {
-      metadataFieldsCount: metadataFields.length,
-      metadataFields: metadataFields.map((f) => ({
-        key: f.key,
-        value: f.value,
-        placeholder: f.placeholder,
-      })),
-      uploadMetadataBefore: uploadMetadata,
-      uploadMetadataKeys: Object.keys(uploadMetadata),
-      finalMetadata: finalMetadata,
-      finalMetadataKeys: Object.keys(finalMetadata),
-      finalMetadataCount: Object.keys(finalMetadata).length,
-      finalMetadataEntries: Object.entries(finalMetadata),
-    });
-
-    // Initialize file status tracking
+    // Initialize file status
     const initialStatus: Record<
       string,
       {
@@ -1448,7 +1610,7 @@ function FileManager({
     setFileUploadStatus(initialStatus);
 
     try {
-      // Get base URL and access token for direct HTTP requests
+      // Get credentials
       const accessToken =
         typeof window !== 'undefined'
           ? localStorage.getItem('accessToken')
@@ -1457,7 +1619,6 @@ function FileManager({
         throw new Error('No access token found. Please log in again.');
       }
 
-      // Get deployment URL from pipeline or runtime config
       let baseUrl = '';
       if (typeof window !== 'undefined') {
         const pipelineStr = localStorage.getItem('pipeline');
@@ -1472,883 +1633,186 @@ function FileManager({
           baseUrl = window.__RUNTIME_CONFIG__.NEXT_PUBLIC_R2R_DEPLOYMENT_URL;
         }
       }
-
-      // Normalize base URL (remove trailing slash)
       baseUrl = baseUrl.trim().replace(/\/$/, '');
       if (!baseUrl) {
         throw new Error('No deployment URL found. Please log in again.');
       }
 
-      console.log('Using direct HTTP requests:', {
-        baseUrl: baseUrl,
-        hasAccessToken: !!accessToken,
-        endpoint: `${baseUrl}/v3/documents`,
-      });
-
-      const results: Array<{ file: string; success: boolean; error?: string }> =
-        [];
-      let successCount = 0;
-      let errorCount = 0;
-
-      // Upload files sequentially to avoid overwhelming the server
-      for (let i = 0; i < uploadFiles.length; i++) {
-        // Check if upload was cancelled
-        if (abortController.signal.aborted) {
-          setFileUploadStatus((prev) => {
-            const updated = { ...prev };
-            uploadFiles.slice(i).forEach((file) => {
-              if (updated[file.name]?.status === 'pending') {
-                updated[file.name] = {
-                  progress: 0,
-                  status: 'error',
-                  error: 'Upload cancelled',
-                };
-              }
-            });
-            return updated;
-          });
-          break;
-        }
-
-        const file = uploadFiles[i];
-
-        try {
-          // Update status to uploading
-          setFileUploadStatus((prev) => ({
-            ...prev,
-            [file.name]: { progress: 0, status: 'uploading' },
-          }));
-          setUploadingFile(file.name);
-          setUploadProgress((i / uploadFiles.length) * 100);
-
-          // Prepare metadata - use file name as title, add custom metadata
-          // Extract only filename without path (support both / and \ separators)
-          const getFileNameOnly = (filePath: string): string => {
-            // Handle both forward and backward slashes
-            const parts = filePath.split(/[/\\]/);
-            return parts[parts.length - 1] || filePath;
-          };
-
-          const fileNameOnly = getFileNameOnly(file.name);
-
-          // Build metadata object - start with title, then add all custom metadata
-          // CRITICAL: Use finalMetadata collected before the loop started
-          // This ensures all metadata (including from metadataFields) is included
-          const metadata: Record<string, any> = {
-            title: fileNameOnly, // Only filename, no path
-          };
-
-          // Add all custom metadata from finalMetadata (collected before upload loop)
-          // finalMetadata already includes all metadataFields that were filled
-          Object.entries(finalMetadata).forEach(([key, value]) => {
-            // Skip 'title' as we set it explicitly above
-            if (
-              key !== 'title' &&
-              key.trim() &&
-              value &&
-              typeof value === 'string' &&
-              value.trim()
-            ) {
-              metadata[key.trim()] = value.trim();
-            }
-          });
-
-          // Double-check: Also add any metadataFields that might not have been saved yet
-          // This is a safety net in case state changed between collection and upload
-          metadataFields.forEach((field) => {
-            if (field.key.trim() && field.key !== 'title') {
-              const valueToUse = field.value.trim() || field.placeholder.trim();
-              if (valueToUse) {
-                metadata[field.key.trim()] = valueToUse;
-              }
-            }
-          });
-
-          // Log metadata for debugging
-          console.log('Uploading file with metadata:', {
-            fileName: file.name,
-            fileNameOnly: fileNameOnly,
-            uploadMetadata: uploadMetadata,
-            finalMetadata: finalMetadata,
-            metadataFields: metadataFields,
-            combinedMetadata: metadata,
-            metadataKeys: Object.keys(metadata),
-            metadataEntries: Object.entries(metadata),
-            metadataCount: Object.keys(metadata).length,
-            hasCustomMetadata: Object.keys(metadata).length > 1, // More than just title
-          });
-
-          // Prepare collections - use uploadCollectionIds, but if empty and we're viewing a collection, use that
-          const collectionsToUse =
-            uploadCollectionIds.length > 0
-              ? uploadCollectionIds
-              : selectedCollectionId
-                ? [selectedCollectionId]
-                : [];
-
-          console.log('Collection IDs being sent:', collectionsToUse);
-
-          // Create FormData for multipart/form-data request
-          const formData = new FormData();
-          formData.append('file', file);
-          formData.append('ingestion_mode', uploadQuality); // Selected quality (default: hi-res)
-
-          // Add metadata as JSON string
-          if (Object.keys(metadata).length > 0) {
-            formData.append('metadata', JSON.stringify(metadata));
-            console.log(
-              'Metadata being sent:',
-              JSON.stringify(metadata, null, 2)
-            );
-          } else {
-            console.warn('No metadata to send (not even title)');
-          }
-
-          // Add collection_ids as JSON array string
-          if (collectionsToUse.length > 0) {
-            formData.append('collection_ids', JSON.stringify(collectionsToUse));
-            console.log('Collection IDs being sent:', collectionsToUse);
-          } else {
-            console.log(
-              'No collection IDs specified - file will be added to "All Documents"'
-            );
-          }
-
-          console.log('Upload params summary:', {
-            fileName: file.name,
-            hasFile: true,
-            fileSize: file.size,
-            fileType: file.type,
-            ingestionMode: uploadQuality,
-            hasMetadata: Object.keys(metadata).length > 0,
-            metadataKeys: Object.keys(metadata),
-            metadataCount: Object.keys(metadata).length,
-            metadataFull: metadata,
-            hasCollectionIds: collectionsToUse.length > 0,
-            collectionIdsCount: collectionsToUse.length,
-            collectionIds: collectionsToUse,
-            selectedCollectionId: selectedCollectionId,
-          });
-
-          // Upload file using direct HTTP request
-          let result;
-          try {
-            const response = await fetch(`${baseUrl}/v3/documents`, {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                // Don't set Content-Type - browser will set it with boundary for FormData
-              },
-              body: formData,
-              signal: abortController.signal,
-            });
-
-            if (!response.ok) {
-              const errorText = await response.text();
-              let errorData;
-              try {
-                errorData = JSON.parse(errorText);
-              } catch {
-                errorData = { detail: errorText };
-              }
-
-              // Handle 409 Conflict - document already exists
-              if (response.status === 409) {
-                console.log('409 Conflict detected, attempting to resolve...', {
-                  status: response.status,
-                  error: errorData,
-                });
-
-                // Extract document ID from error response
-                let existingDocumentId: string | null = null;
-                const errorMessage =
-                  errorData?.detail || JSON.stringify(errorData);
-
-                // Try to extract UUID from error message
-                const uuidMatch = errorMessage.match(
-                  /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i
-                );
-                if (uuidMatch) {
-                  existingDocumentId = uuidMatch[1];
-                }
-
-                if (existingDocumentId) {
-                  try {
-                    console.log(
-                      `Deleting existing document ${existingDocumentId} before re-uploading...`
-                    );
-                    // Delete existing document
-                    const deleteResponse = await fetch(
-                      `${baseUrl}/v3/documents/${existingDocumentId}`,
-                      {
-                        method: 'DELETE',
-                        headers: {
-                          Authorization: `Bearer ${accessToken}`,
-                        },
-                      }
-                    );
-
-                    if (!deleteResponse.ok) {
-                      throw new Error(
-                        `Failed to delete document: ${deleteResponse.status}`
-                      );
-                    }
-
-                    console.log(
-                      `Retrying upload after deleting existing document...`
-                    );
-                    // Retry upload
-                    const retryResponse = await fetch(
-                      `${baseUrl}/v3/documents`,
-                      {
-                        method: 'POST',
-                        headers: {
-                          Authorization: `Bearer ${accessToken}`,
-                        },
-                        body: formData,
-                        signal: abortController.signal,
-                      }
-                    );
-
-                    if (!retryResponse.ok) {
-                      const retryErrorText = await retryResponse.text();
-                      throw new Error(
-                        `Retry failed: ${retryResponse.status} - ${retryErrorText}`
-                      );
-                    }
-
-                    result = await retryResponse.json();
-                  } catch (deleteError: any) {
-                    console.warn(
-                      `Failed to delete existing document ${existingDocumentId}, trying with new ID:`,
-                      deleteError
-                    );
-                    // If delete fails, try again (API should generate new ID)
-                    const retryResponse = await fetch(
-                      `${baseUrl}/v3/documents`,
-                      {
-                        method: 'POST',
-                        headers: {
-                          Authorization: `Bearer ${accessToken}`,
-                        },
-                        body: formData,
-                        signal: abortController.signal,
-                      }
-                    );
-
-                    if (!retryResponse.ok) {
-                      const retryErrorText = await retryResponse.text();
-                      throw new Error(
-                        `Retry failed: ${retryResponse.status} - ${retryErrorText}`
-                      );
-                    }
-
-                    result = await retryResponse.json();
-                  }
-                } else {
-                  // If we can't extract ID, try again (API should generate new ID)
-                  console.warn(
-                    'Could not extract document ID from 409 error, retrying'
-                  );
-                  const retryResponse = await fetch(`${baseUrl}/v3/documents`, {
-                    method: 'POST',
-                    headers: {
-                      Authorization: `Bearer ${accessToken}`,
-                    },
-                    body: formData,
-                    signal: abortController.signal,
-                  });
-
-                  if (!retryResponse.ok) {
-                    const retryErrorText = await retryResponse.text();
-                    throw new Error(
-                      `Retry failed: ${retryResponse.status} - ${retryErrorText}`
-                    );
-                  }
-
-                  result = await retryResponse.json();
-                }
-              } else {
-                // Re-throw if it's not a 409 error
-                throw new Error(
-                  `HTTP ${response.status}: ${errorData?.detail || errorText}`
-                );
-              }
-            } else {
-              result = await response.json();
-            }
-          } catch (fetchError: any) {
-            // Handle network errors or other fetch errors
-            if (fetchError.name === 'AbortError') {
-              throw new Error('Upload cancelled');
-            }
-            throw fetchError;
-          }
-
-          // Update progress to 50% after upload starts
-          setFileUploadStatus((prev) => ({
-            ...prev,
-            [file.name]: { progress: 50, status: 'uploading' },
-          }));
-
-          // Log full result structure for debugging
-          console.log('Full upload result structure:', {
-            result: result,
-            resultType: typeof result,
-            hasResults: !!(result as any)?.results,
-            resultsType: typeof (result as any)?.results,
-            resultsKeys: (result as any)?.results
-              ? Object.keys((result as any).results)
-              : [],
-            resultsContent: (result as any)?.results,
-          });
-
-          // Extract document ID from response
-          // API returns: { results: { id: "...", ... } } or { results: { document_id: "...", ... } }
-          const documentId =
-            (result as any)?.results?.id ||
-            (result as any)?.results?.document_id ||
-            (result as any)?.results?.documentId ||
-            (result as any)?.id ||
-            (result as any)?.document_id ||
-            (result as any)?.documentId;
-
-          console.log('Extracted documentId:', documentId);
-
-          if (documentId) {
-            // CRITICAL: Update document metadata after creation
-            // User's hypothesis: metadata might be stored in chunks, not document
-            // So we update chunks' metadata to ensure metadata is accessible
-            if (Object.keys(metadata).length > 1) {
-              // More than just title
-              try {
-                console.log(
-                  'Updating document chunks metadata after creation:',
-                  {
-                    documentId: documentId,
-                    metadata: metadata,
-                    metadataKeys: Object.keys(metadata),
-                  }
-                );
-
-                // Wait a bit for chunks to be created by ingestion process
-                await new Promise((resolve) => setTimeout(resolve, 2000));
-
-                // Get document chunks and update their metadata using direct HTTP request
-                try {
-                  const chunksResponse = await fetch(
-                    `${baseUrl}/v3/documents/${documentId}/chunks?offset=0&limit=100`,
-                    {
-                      method: 'GET',
-                      headers: {
-                        Authorization: `Bearer ${accessToken}`,
-                      },
-                    }
-                  );
-
-                  if (chunksResponse.ok) {
-                    const chunksData = await chunksResponse.json();
-                    const chunks = chunksData?.results || [];
-
-                    if (chunks.length > 0) {
-                      console.log(
-                        `Found ${chunks.length} chunks to update with metadata`
-                      );
-
-                      const updateChunkPromises = chunks.map(
-                        async (chunk: any) => {
-                          try {
-                            // Merge document-level metadata with existing chunk metadata
-                            const updatedMetadata = {
-                              ...(chunk.metadata || {}),
-                              ...metadata,
-                            };
-
-                            // Update chunk metadata using direct HTTP request
-                            // API requires both text and metadata for chunk update
-                            const updateResponse = await fetch(
-                              `${baseUrl}/v3/chunks/${chunk.id}`,
-                              {
-                                method: 'POST',
-                                headers: {
-                                  Authorization: `Bearer ${accessToken}`,
-                                  'Content-Type': 'application/json',
-                                },
-                                body: JSON.stringify({
-                                  text: chunk.text || '', // Preserve existing text
-                                  metadata: updatedMetadata,
-                                }),
-                              }
-                            );
-
-                            if (updateResponse.ok) {
-                              console.log(
-                                `✅ Updated chunk ${chunk.id} with metadata keys:`,
-                                Object.keys(updatedMetadata)
-                              );
-                            } else {
-                              console.warn(
-                                `⚠️ Failed to update chunk ${chunk.id}: ${updateResponse.status}`
-                              );
-                            }
-                          } catch (chunkError: any) {
-                            console.warn(
-                              `⚠️ Failed to update chunk ${chunk.id} metadata:`,
-                              chunkError
-                            );
-                          }
-                        }
-                      );
-
-                      await Promise.all(updateChunkPromises);
-                      console.log(
-                        `✅ Document metadata propagated to ${chunks.length} chunks`
-                      );
-                    } else {
-                      console.warn(
-                        '⚠️ No chunks found for document yet - chunks may not be created immediately after upload'
-                      );
-                      console.log(
-                        'Metadata was sent in documents.create() call, it should be stored when chunks are created'
-                      );
-                    }
-                  } else {
-                    console.warn(
-                      '⚠️ Failed to fetch chunks:',
-                      chunksResponse.status
-                    );
-                  }
-                } catch (chunksError: any) {
-                  console.warn(
-                    '⚠️ Error fetching/updating chunks:',
-                    chunksError
-                  );
-                }
-              } catch (metadataUpdateError: any) {
-                console.warn(
-                  'Failed to update chunks metadata after creation:',
-                  metadataUpdateError
-                );
-                // Continue - metadata was already sent in create() call
-              }
-            }
-
-            // CRITICAL: Add document to collections asynchronously (fire-and-forget)
-            // According to API docs: collection_ids can be passed during creation, but it's more reliable
-            // to add documents to collections after creation using collections.addDocument
-            // The default collection (c56422e7) is assigned automatically by R2R
-            // We do this in background to not block the upload UI
-            if (collectionsToUse.length > 0) {
-              console.log('Scheduling background collection assignment:', {
-                documentId: documentId,
-                collectionIds: collectionsToUse,
-              });
-
-              // Start background task without blocking (fire-and-forget pattern in Next.js)
-              // This allows the upload to complete quickly while collection assignment happens in background
-              (async () => {
-                try {
-                  // Wait for document to be fully processed (ingestion may take time)
-                  await new Promise((resolve) => setTimeout(resolve, 3000));
-
-                  console.log(
-                    'Starting background collection assignment for document:',
-                    documentId
-                  );
-
-                  // Retry logic: try adding to collection with retries using direct HTTP requests
-                  const addPromises = collectionsToUse.map(
-                    async (collectionId) => {
-                      let retries = 3;
-                      let lastError: any = null;
-
-                      while (retries > 0) {
-                        try {
-                          const addResponse = await fetch(
-                            `${baseUrl}/v3/collections/${collectionId}/documents/${documentId}`,
-                            {
-                              method: 'POST',
-                              headers: {
-                                Authorization: `Bearer ${accessToken}`,
-                              },
-                            }
-                          );
-
-                          if (!addResponse.ok) {
-                            const errorText = await addResponse.text();
-                            throw new Error(
-                              `HTTP ${addResponse.status}: ${errorText}`
-                            );
-                          }
-                          console.log(
-                            `✅ Successfully added document ${documentId} to collection ${collectionId}`
-                          );
-                          return; // Success, exit retry loop
-                        } catch (addError: any) {
-                          lastError = addError;
-                          retries--;
-
-                          // Check if document is already in collection (not a real error)
-                          const errorMessage =
-                            addError?.message || addError?.toString() || '';
-                          if (
-                            errorMessage.includes('already') ||
-                            errorMessage.includes('exists')
-                          ) {
-                            console.log(
-                              `ℹ️ Document ${documentId} already in collection ${collectionId}`
-                            );
-                            return; // Not an error, exit
-                          }
-
-                          if (retries > 0) {
-                            console.warn(
-                              `⚠️ Failed to add document ${documentId} to collection ${collectionId}, retrying... (${retries} attempts left)`,
-                              addError
-                            );
-                            // Wait before retry (exponential backoff)
-                            await new Promise((resolve) =>
-                              setTimeout(resolve, 2000 * (4 - retries))
-                            );
-                          } else {
-                            console.error(
-                              `❌ Failed to add document ${documentId} to collection ${collectionId} after all retries:`,
-                              lastError
-                            );
-                            // Show toast notification for user
-                            toast({
-                              title: 'Collection Assignment Warning',
-                              description: `Document uploaded but may not be in selected collection. Please check manually.`,
-                              variant: 'default',
-                              action: (
-                                <ToastAction altText="Dismiss">OK</ToastAction>
-                              ),
-                            });
-                          }
-                        }
-                      }
-                    }
-                  );
-
-                  await Promise.all(addPromises);
-                  console.log(
-                    `✅ Background collection assignment completed for document ${documentId}`
-                  );
-                } catch (bgError: any) {
-                  console.error(
-                    '❌ Background collection assignment error:',
-                    bgError
-                  );
-                }
-              })(); // Immediately invoked async function - runs in background
-
-              console.log(
-                `📋 Collection assignment scheduled in background for document ${documentId}`
-              );
-
-              // VERIFICATION: Check document in R2R to verify metadata and collection assignment
-              // This also runs in background to not block upload completion
-              (async () => {
-                try {
-                  // Wait a bit for API to process (longer wait after metadata update)
-                  await new Promise((resolve) => setTimeout(resolve, 2000));
-
-                  // Get document details to verify using direct HTTP request
-                  const verifyResponse = await fetch(
-                    `${baseUrl}/v3/documents/${documentId}`,
-                    {
-                      method: 'GET',
-                      headers: {
-                        Authorization: `Bearer ${accessToken}`,
-                      },
-                    }
-                  );
-
-                  if (!verifyResponse.ok) {
-                    console.warn(
-                      '⚠️ VERIFICATION FAILED - Could not fetch document:',
-                      verifyResponse.status
-                    );
-                    return;
-                  }
-
-                  const verifyData = await verifyResponse.json();
-                  const verifiedDoc = verifyData?.results;
-
-                  if (verifiedDoc) {
-                    // Also check collections directly for more reliable collection verification
-                    let docCollectionIds: string[] = [];
-                    try {
-                      for (const collectionId of collectionsToUse) {
-                        const collectionDocsResponse = await fetch(
-                          `${baseUrl}/v3/collections/${collectionId}/documents?offset=0&limit=100`,
-                          {
-                            method: 'GET',
-                            headers: {
-                              Authorization: `Bearer ${accessToken}`,
-                            },
-                          }
-                        );
-
-                        if (collectionDocsResponse.ok) {
-                          const collectionDocs =
-                            await collectionDocsResponse.json();
-                          if (
-                            collectionDocs.results?.some(
-                              (doc: any) => doc.id === documentId
-                            )
-                          ) {
-                            docCollectionIds.push(collectionId);
-                          }
-                        }
-                      }
-                    } catch (collectionCheckError) {
-                      console.warn(
-                        'Could not verify collections directly:',
-                        collectionCheckError
-                      );
-                      // Fallback to document's collectionIds
-                      docCollectionIds =
-                        verifiedDoc.collectionIds ||
-                        verifiedDoc.collection_ids ||
-                        [];
-                    }
-
-                    console.log(
-                      '✅ VERIFICATION - Document details from R2R:',
-                      {
-                        documentId: verifiedDoc.id,
-                        title: verifiedDoc.title,
-                        metadata: verifiedDoc.metadata,
-                        collectionIdsFromDoc:
-                          verifiedDoc.collectionIds ||
-                          (verifiedDoc as any).collection_ids ||
-                          [],
-                        collectionIdsFromCollections: docCollectionIds,
-                        hasMetadata: !!verifiedDoc.metadata,
-                        metadataKeys: verifiedDoc.metadata
-                          ? Object.keys(verifiedDoc.metadata)
-                          : [],
-                        metadataCount: verifiedDoc.metadata
-                          ? Object.keys(verifiedDoc.metadata).length
-                          : 0,
-                        inCollection:
-                          collectionsToUse.length > 0
-                            ? docCollectionIds.includes(collectionsToUse[0])
-                            : false,
-                      }
-                    );
-
-                    // Check if metadata matches what we sent
-                    const expectedMetadata = metadata;
-                    const actualMetadata = verifiedDoc.metadata || {};
-                    const metadataMatch = Object.keys(expectedMetadata).every(
-                      (key) => actualMetadata[key] === expectedMetadata[key]
-                    );
-
-                    if (!metadataMatch) {
-                      console.warn('⚠️ METADATA MISMATCH:', {
-                        expected: expectedMetadata,
-                        actual: actualMetadata,
-                        expectedKeys: Object.keys(expectedMetadata),
-                        actualKeys: Object.keys(actualMetadata),
-                      });
-                    } else {
-                      console.log(
-                        '✅ METADATA VERIFIED - All metadata fields match'
-                      );
-                    }
-
-                    // Check collection assignment
-                    const inAllCollections =
-                      collectionsToUse.length > 0
-                        ? collectionsToUse.every((id) =>
-                            docCollectionIds.includes(id)
-                          )
-                        : true; // If no collections specified, that's OK
-
-                    if (!inAllCollections) {
-                      console.warn('⚠️ COLLECTION ASSIGNMENT ISSUE:', {
-                        expectedCollections: collectionsToUse,
-                        actualCollections: docCollectionIds,
-                        documentCollectionIds:
-                          verifiedDoc.collectionIds ||
-                          (verifiedDoc as any).collection_ids ||
-                          [],
-                      });
-                    } else {
-                      console.log(
-                        '✅ COLLECTION ASSIGNMENT VERIFIED - Document is in all expected collections'
-                      );
-                    }
-                  } else {
-                    console.warn(
-                      '⚠️ VERIFICATION FAILED - Document not found in R2R'
-                    );
-                  }
-                } catch (verifyError: any) {
-                  console.error(
-                    '❌ VERIFICATION ERROR - Failed to verify document:',
-                    verifyError
-                  );
-                }
-              })(); // Background verification - doesn't block upload
-
-              // Note: Final refresh happens after all files are uploaded (see final status update)
-            } else {
-              console.warn(
-                'No document ID returned from upload, cannot add to collections'
-              );
-              console.log('Full result object:', result);
-            }
-          }
-
-          // Mark as success
-          setFileUploadStatus((prev) => ({
-            ...prev,
-            [file.name]: { progress: 100, status: 'success' },
-          }));
-          results.push({ file: file.name, success: true });
-          successCount++;
-
-          // Show success toast for individual file with action button
-          toast({
-            title: 'File Uploaded',
-            description: `${file.name} uploaded successfully.`,
-            action: <ToastAction altText="Dismiss">OK</ToastAction>,
-          });
-        } catch (error: any) {
-          console.error(`Error uploading file ${file.name}:`, error);
-
-          // Extract more detailed error message
-          let errorMessage = 'Failed to upload file';
-          if (error?.message) {
-            errorMessage = error.message;
-          } else if (error?.response?.data?.detail) {
-            // Handle API validation errors
-            const detail = error.response.data.detail;
-            if (Array.isArray(detail) && detail.length > 0) {
-              errorMessage = detail
-                .map((d: any) => d.msg || d.message || JSON.stringify(d))
-                .join(', ');
-            } else if (typeof detail === 'string') {
-              errorMessage = detail;
-            }
-          } else if (error?.response?.data?.message) {
-            errorMessage = error.response.data.message;
-          }
-
-          setFileUploadStatus((prev) => ({
-            ...prev,
-            [file.name]: { progress: 0, status: 'error', error: errorMessage },
-          }));
-          results.push({
-            file: file.name,
-            success: false,
-            error: errorMessage,
-          });
-          errorCount++;
-
-          // Show error toast for individual file with action button
-          toast({
-            title: 'Upload Failed',
-            description: `Failed to upload ${file.name}: ${errorMessage}`,
-            variant: 'destructive',
-            action: <ToastAction altText="Dismiss">OK</ToastAction>,
-          });
-        }
-
-        // Update overall progress
-        const overallProgress = ((i + 1) / uploadFiles.length) * 100;
-        setUploadProgress(overallProgress);
+      // Prepare collections
+      const collectionsToUse =
+        uploadCollectionIds.length > 0
+          ? uploadCollectionIds
+          : selectedCollectionId
+            ? [selectedCollectionId]
+            : [];
+
+      // Show info toast for hi-res mode (can take minutes for large files)
+      if (uploadQuality === 'hi-res') {
+        toast({
+          title: 'Processing Started',
+          description:
+            'Hi-res mode may take several minutes for large files. Progress will update.',
+          duration: 5000,
+        });
       }
 
-      // Final status update
+      // PARALLEL UPLOAD with concurrency limit (3 files at a time)
+      const CONCURRENCY_LIMIT = 3;
+      const results: Array<{
+        file: string;
+        success: boolean;
+        documentId?: string;
+        error?: string;
+      }> = [];
+      let completedCount = 0;
+
+      // Process files in batches
+      for (let i = 0; i < uploadFiles.length; i += CONCURRENCY_LIMIT) {
+        if (abortController.signal.aborted) break;
+
+        const batch = uploadFiles.slice(i, i + CONCURRENCY_LIMIT);
+
+        // Mark batch as uploading
+        batch.forEach((file) => {
+          setFileUploadStatus((prev) => ({
+            ...prev,
+            [file.name]: { progress: 30, status: 'uploading' },
+          }));
+        });
+
+        // Upload batch in parallel with progress animation
+        const batchResults = await Promise.all(
+          batch.map(async (file) => {
+            if (abortController.signal.aborted) {
+              return {
+                file: file.name,
+                success: false,
+                error: 'Upload cancelled',
+              };
+            }
+
+            setUploadingFile(file.name);
+
+            // Start progress animation (30% -> 90% over time while waiting)
+            let currentProgress = 30;
+            const progressInterval = setInterval(() => {
+              if (currentProgress < 90) {
+                currentProgress += Math.random() * 5; // Random increment 0-5%
+                currentProgress = Math.min(currentProgress, 90);
+                setFileUploadStatus((prev) => ({
+                  ...prev,
+                  [file.name]: {
+                    progress: Math.round(currentProgress),
+                    status: 'uploading',
+                  },
+                }));
+              }
+            }, 500); // Update every 500ms
+
+            const result = await uploadSingleFile(
+              file,
+              baseUrl,
+              accessToken,
+              finalMetadata,
+              collectionsToUse,
+              uploadQuality,
+              abortController.signal
+            );
+
+            // Stop progress animation
+            clearInterval(progressInterval);
+            console.log(`✅ Upload result for ${file.name}:`, result);
+
+            // Update status
+            setFileUploadStatus((prev) => {
+              console.log(
+                `📊 Updating status for ${file.name}: ${result.success ? 'success' : 'error'}`
+              );
+              return {
+                ...prev,
+                [file.name]: {
+                  progress: result.success ? 100 : 0,
+                  status: result.success ? 'success' : 'error',
+                  error: result.error,
+                },
+              };
+            });
+
+            // Show individual toast
+            if (result.success) {
+              console.log(`🎉 Showing success toast for ${file.name}`);
+              toast({
+                title: 'File Uploaded',
+                description: `${file.name} uploaded successfully.`,
+              });
+
+              // Run post-upload tasks in background (non-blocking)
+              if (result.documentId) {
+                runPostUploadTasks(
+                  result.documentId,
+                  collectionsToUse,
+                  baseUrl,
+                  accessToken
+                ).catch(() => {}); // Ignore errors
+              }
+            } else {
+              toast({
+                title: 'Upload Failed',
+                description: `${file.name}: ${result.error}`,
+                variant: 'destructive',
+              });
+            }
+
+            return { file: file.name, ...result };
+          })
+        );
+
+        results.push(...batchResults);
+        completedCount += batch.length;
+        setUploadProgress((completedCount / uploadFiles.length) * 100);
+      }
+
+      // Calculate final counts
+      const successCount = results.filter((r) => r.success).length;
+      const errorCount = results.filter((r) => !r.success).length;
+
+      // Final toast
       if (!abortController.signal.aborted) {
-        if (errorCount === 0) {
-          // All files uploaded successfully
+        if (errorCount === 0 && successCount > 0) {
           toast({
             title: 'Upload Complete',
             description: `Successfully uploaded ${successCount} file${successCount !== 1 ? 's' : ''}.`,
-            duration: 4000,
+            duration: 3000,
           });
-
-          // Reset and close after short delay to show success state
-          setTimeout(async () => {
-            setUploadFiles([]);
-            setUploadMetadata({});
-            setUploadModalOpen(false);
-            setUploadingFile('');
-            setUploadProgress(0);
-            setUploadQuality('hi-res');
-            setMetadataFields([]);
-            setFileUploadStatus({});
-
-            // Reset collections
-            if (selectedCollectionId) {
-              setUploadCollectionIds([selectedCollectionId]);
-            } else {
-              setUploadCollectionIds([]);
-            }
-
-            // Refresh files list and collections to ensure UI is updated
-            // This is critical for showing newly uploaded files in the collection
-            console.log('Final refresh: Starting...', {
-              selectedCollectionId,
-              uploadCollectionIds,
-              viewingCollection: !!selectedCollectionId,
-              fileAddedToCurrentCollection:
-                selectedCollectionId &&
-                uploadCollectionIds.includes(selectedCollectionId),
-            });
-
-            // Refresh collections list first
-            onCollectionChange();
-
-            // Wait for API to process all changes (collections, documents, etc.)
-            await new Promise((resolve) => setTimeout(resolve, 800));
-
-            // Refresh files list - this will show the new files
-            await fetchFiles();
-            console.log('Final refresh: Files list updated');
-
-            // Additional refresh for collection view after a longer delay
-            // This ensures the API has fully processed the collection assignment
-            if (
-              selectedCollectionId &&
-              uploadCollectionIds.includes(selectedCollectionId)
-            ) {
-              setTimeout(async () => {
-                console.log('Additional refresh for collection view (delayed)');
-                await fetchFiles();
-              }, 1500);
-            }
-          }, 2000);
-        } else if (successCount > 0) {
-          // Partial success - show summary
-          const failedFiles = results
-            .filter((r) => !r.success)
-            .map((r) => r.file)
-            .join(', ');
+        } else if (successCount > 0 && errorCount > 0) {
           toast({
             title: 'Partial Success',
-            description: `${successCount} file${successCount !== 1 ? 's' : ''} uploaded successfully. ${errorCount} file${errorCount !== 1 ? 's' : ''} failed: ${failedFiles}`,
+            description: `${successCount} uploaded, ${errorCount} failed.`,
             variant: 'default',
-            duration: 6000,
-          });
-        } else {
-          // All failed - show summary
-          const failedFiles = results
-            .filter((r) => !r.success)
-            .map((r) => r.file)
-            .join(', ');
-          toast({
-            title: 'Upload Failed',
-            description: `Failed to upload ${errorCount} file${errorCount !== 1 ? 's' : ''}: ${failedFiles}`,
-            variant: 'destructive',
-            duration: 6000,
           });
         }
+
+        // Close modal and reset state IMMEDIATELY (non-blocking)
+        setUploadFiles([]);
+        setUploadMetadata({});
+        setUploadModalOpen(false);
+        setUploadingFile('');
+        setUploadProgress(0);
+        setUploadQuality('hi-res');
+        setMetadataFields([]);
+        setFileUploadStatus({});
+
+        if (selectedCollectionId) {
+          setUploadCollectionIds([selectedCollectionId]);
+        } else {
+          setUploadCollectionIds([]);
+        }
+
+        // Refresh in background (non-blocking)
+        setTimeout(() => {
+          onCollectionChange();
+          fetchFiles();
+        }, 500);
       }
     } catch (error: any) {
       console.error('Error in upload process:', error);
@@ -2360,10 +1824,7 @@ function FileManager({
     } finally {
       setIsUploading(false);
       setUploadAbortController(null);
-      if (abortController.signal.aborted) {
-        setUploadingFile('');
-        setUploadProgress(0);
-      }
+      setUploadingFile('');
     }
   };
 
@@ -3390,6 +2851,8 @@ function FileManager({
             } else {
               setUploadCollectionIds([]);
             }
+            // Reset to file upload tab
+            setUploadActiveTab('file');
           } else {
             // When closing dialog, reset everything
             // Cancel any ongoing upload
@@ -3405,6 +2868,7 @@ function FileManager({
             setFileUploadStatus({});
             setIsUploading(false);
             setUploadAbortController(null);
+            setUploadActiveTab('file'); // Reset tab selection
             // Reset collections - will be set by useEffect if collection is selected
             if (selectedCollectionId) {
               setUploadCollectionIds([selectedCollectionId]);
@@ -3418,572 +2882,882 @@ function FileManager({
           <DialogHeader>
             <DialogTitle>Upload Documents</DialogTitle>
             <DialogDescription>
-              Select files to upload and configure upload settings.
+              Upload files from your computer or provide a URL to fetch content.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 py-4">
-            {/* File Dropzone */}
-            <div
-              {...getRootProps()}
-              className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-                isDragActive
-                  ? 'border-primary bg-primary/5'
-                  : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/30'
-              }`}
-            >
-              <input {...getInputProps()} />
-              <div className="flex flex-col items-center">
-                <Upload className="h-10 w-10 text-muted-foreground mb-4" />
-                {isDragActive ? (
-                  <p className="text-sm font-medium">Drop files here...</p>
-                ) : (
-                  <>
-                    <p className="text-sm font-medium mb-1">
-                      Drag and drop files here, or click to select
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Supports PDF, DOCX, TXT, JPG, PNG, and more
-                    </p>
-                  </>
+          <Tabs
+            value={uploadActiveTab}
+            onValueChange={(value) =>
+              setUploadActiveTab(value as 'file' | 'url')
+            }
+            className="w-full"
+          >
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="file" className="flex items-center gap-2">
+                <Upload className="h-4 w-4" />
+                File Upload
+              </TabsTrigger>
+              <TabsTrigger value="url" className="flex items-center gap-2">
+                <Link2 className="h-4 w-4" />
+                URL Upload
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="file" className="space-y-6 py-4">
+              {/* File Dropzone */}
+              <div
+                {...getRootProps()}
+                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                  isDragActive
+                    ? 'border-primary bg-primary/5'
+                    : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/30'
+                }`}
+              >
+                <input {...getInputProps()} />
+                <div className="flex flex-col items-center">
+                  <Upload className="h-10 w-10 text-muted-foreground mb-4" />
+                  {isDragActive ? (
+                    <p className="text-sm font-medium">Drop files here...</p>
+                  ) : (
+                    <>
+                      <p className="text-sm font-medium mb-1">
+                        Drag and drop files here, or click to select
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Supports PDF, DOCX, TXT, JPG, PNG, and more
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Selected Files List */}
+              {uploadFiles.length > 0 && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Selected Files ({uploadFiles.length})
+                  </label>
+                  <ScrollArea className="h-32 rounded-md border p-2">
+                    <div className="space-y-1">
+                      {uploadFiles.map((file, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between text-sm py-1 px-2 rounded hover:bg-muted/50"
+                        >
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <span className="truncate">{file.name}</span>
+                            <span className="text-xs text-muted-foreground flex-shrink-0">
+                              ({(file.size / 1024).toFixed(1)} KB)
+                            </span>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setUploadFiles((prev) =>
+                                prev.filter((_, i) => i !== index)
+                              );
+                            }}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+
+              {/* Collection Selection - MultiSelect */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Collections</label>
+                <MultiSelect
+                  id="upload-collections"
+                  options={[
+                    ...collections.map((collection) => ({
+                      value: collection.id,
+                      label: collection.name || collection.id,
+                    })),
+                  ]}
+                  value={uploadCollectionIds}
+                  onChange={setUploadCollectionIds}
+                  onCreateNew={async (name: string) => {
+                    try {
+                      const client = await getClient();
+                      if (!client) {
+                        throw new Error('Failed to get authenticated client');
+                      }
+
+                      const newCollection = await client.collections.create({
+                        name: name,
+                      });
+
+                      const collectionId = newCollection.results.id;
+                      const collectionName =
+                        newCollection.results.name || collectionId;
+
+                      // Refresh collections list
+                      onCollectionChange();
+
+                      toast({
+                        title: 'Success',
+                        description: `Collection "${collectionName}" created successfully.`,
+                      });
+
+                      return { id: collectionId, name: collectionName };
+                    } catch (error: any) {
+                      console.error('Error creating collection:', error);
+                      toast({
+                        title: 'Error',
+                        description:
+                          error?.message || 'Failed to create collection.',
+                        variant: 'destructive',
+                      });
+                      return null;
+                    }
+                  }}
+                />
+                {uploadCollectionIds.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    If no collection is selected, documents will be added to
+                    "All Documents"
+                  </p>
                 )}
               </div>
-            </div>
 
-            {/* Selected Files List */}
-            {uploadFiles.length > 0 && (
+              {/* Quality Selection */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Selected Files ({uploadFiles.length})
-                </label>
-                <ScrollArea className="h-32 rounded-md border p-2">
-                  <div className="space-y-1">
-                    {uploadFiles.map((file, index) => (
+                <label className="text-sm font-medium">Upload Quality</label>
+                <Select value={uploadQuality} onValueChange={setUploadQuality}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="hi-res">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-yellow-500" />
+                        <span>Maximum Quality (hi-res)</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="fast">
+                      <div className="flex items-center gap-2">
+                        <Upload className="h-4 w-4 text-blue-500" />
+                        <span>Fast (fast)</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="custom">
+                      <div className="flex items-center gap-2">
+                        <Edit className="h-4 w-4 text-purple-500" />
+                        <span>Custom (custom)</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {uploadQuality === 'hi-res' &&
+                    'Maximum quality ensures best extraction and embedding results'}
+                  {uploadQuality === 'fast' &&
+                    'Faster processing with slightly lower quality'}
+                  {uploadQuality === 'custom' &&
+                    'Custom ingestion configuration'}
+                </p>
+              </div>
+
+              {/* Metadata */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-sm font-medium">Metadata</label>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <HelpCircle
+                            className="h-3.5 w-3.5 text-muted-foreground cursor-help"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p className="text-xs">
+                            Add custom metadata to help organize and filter your
+                            documents. Metadata applies to all selected files
+                            and can be used for filtering, searching, and
+                            categorization. For example, you can tag files with
+                            project names, departments, or any other relevant
+                            information.
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    <p className="text-xs text-muted-foreground ml-2">
+                      Add key-value pairs to organize and filter documents.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 px-3 border-2 border-primary text-primary bg-transparent hover:bg-primary/10 font-semibold"
+                    onClick={() => {
+                      const newFieldId = crypto.randomUUID();
+                      setMetadataFields((prev) => [
+                        ...prev,
+                        {
+                          id: newFieldId,
+                          key: '',
+                          value: '',
+                          placeholder: '',
+                          showPresets: false,
+                        },
+                      ]);
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-1.5" />
+                    Add metadata
+                  </Button>
+                </div>
+
+                {/* Existing metadata entries */}
+                {Object.entries(uploadMetadata).length > 0 && (
+                  <div className="space-y-2">
+                    {Object.entries(uploadMetadata).map(([key, value]) => (
                       <div
-                        key={index}
-                        className="flex items-center justify-between text-sm py-1 px-2 rounded hover:bg-muted/50"
+                        key={key}
+                        className="flex items-center gap-2 p-2 border rounded-md bg-muted/30"
                       >
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                          <span className="truncate">{file.name}</span>
-                          <span className="text-xs text-muted-foreground flex-shrink-0">
-                            ({(file.size / 1024).toFixed(1)} KB)
-                          </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium text-muted-foreground mb-0.5">
+                            {key}
+                          </div>
+                          <div className="text-sm truncate">{value}</div>
                         </div>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setUploadFiles((prev) =>
-                              prev.filter((_, i) => i !== index)
-                            );
+                          className="h-7 w-7 flex-shrink-0"
+                          onClick={() => {
+                            const newMetadata = { ...uploadMetadata };
+                            delete newMetadata[key];
+                            setUploadMetadata(newMetadata);
                           }}
                         >
-                          <X className="h-3 w-3" />
+                          <X className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     ))}
                   </div>
-                </ScrollArea>
-              </div>
-            )}
+                )}
 
-            {/* Collection Selection - MultiSelect */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Collections</label>
-              <MultiSelect
-                id="upload-collections"
-                options={[
-                  ...collections.map((collection) => ({
-                    value: collection.id,
-                    label: collection.name || collection.id,
-                  })),
-                ]}
-                value={uploadCollectionIds}
-                onChange={setUploadCollectionIds}
-                onCreateNew={async (name: string) => {
-                  try {
-                    const client = await getClient();
-                    if (!client) {
-                      throw new Error('Failed to get authenticated client');
-                    }
-
-                    const newCollection = await client.collections.create({
-                      name: name,
-                    });
-
-                    const collectionId = newCollection.results.id;
-                    const collectionName =
-                      newCollection.results.name || collectionId;
-
-                    // Refresh collections list
-                    onCollectionChange();
-
-                    toast({
-                      title: 'Success',
-                      description: `Collection "${collectionName}" created successfully.`,
-                    });
-
-                    return { id: collectionId, name: collectionName };
-                  } catch (error: any) {
-                    console.error('Error creating collection:', error);
-                    toast({
-                      title: 'Error',
-                      description:
-                        error?.message || 'Failed to create collection.',
-                      variant: 'destructive',
-                    });
-                    return null;
-                  }
-                }}
-              />
-              {uploadCollectionIds.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  If no collection is selected, documents will be added to "All
-                  Documents"
-                </p>
-              )}
-            </div>
-
-            {/* Quality Selection */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Upload Quality</label>
-              <Select value={uploadQuality} onValueChange={setUploadQuality}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="hi-res">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-yellow-500" />
-                      <span>Maximum Quality (hi-res)</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="fast">
-                    <div className="flex items-center gap-2">
-                      <Upload className="h-4 w-4 text-blue-500" />
-                      <span>Fast (fast)</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="custom">
-                    <div className="flex items-center gap-2">
-                      <Edit className="h-4 w-4 text-purple-500" />
-                      <span>Custom (custom)</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                {uploadQuality === 'hi-res' &&
-                  'Maximum quality ensures best extraction and embedding results'}
-                {uploadQuality === 'fast' &&
-                  'Faster processing with slightly lower quality'}
-                {uploadQuality === 'custom' && 'Custom ingestion configuration'}
-              </p>
-            </div>
-
-            {/* Metadata */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <label className="text-sm font-medium">Metadata</label>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <HelpCircle
-                          className="h-3.5 w-3.5 text-muted-foreground cursor-help"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs">
-                        <p className="text-xs">
-                          Add custom metadata to help organize and filter your
-                          documents. Metadata applies to all selected files and
-                          can be used for filtering, searching, and
-                          categorization. For example, you can tag files with
-                          project names, departments, or any other relevant
-                          information.
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <p className="text-xs text-muted-foreground ml-2">
-                    Add key-value pairs to organize and filter documents.
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9 px-3 border-2 border-primary text-primary bg-transparent hover:bg-primary/10 font-semibold"
-                  onClick={() => {
-                    const newFieldId = crypto.randomUUID();
-                    setMetadataFields((prev) => [
-                      ...prev,
-                      {
-                        id: newFieldId,
-                        key: '',
-                        value: '',
-                        placeholder: '',
-                        showPresets: false,
-                      },
-                    ]);
-                  }}
-                >
-                  <Plus className="h-4 w-4 mr-1.5" />
-                  Add metadata
-                </Button>
-              </div>
-
-              {/* Existing metadata entries */}
-              {Object.entries(uploadMetadata).length > 0 && (
-                <div className="space-y-2">
-                  {Object.entries(uploadMetadata).map(([key, value]) => (
-                    <div
-                      key={key}
-                      className="flex items-center gap-2 p-2 border rounded-md bg-muted/30"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-medium text-muted-foreground mb-0.5">
-                          {key}
-                        </div>
-                        <div className="text-sm truncate">{value}</div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 flex-shrink-0"
-                        onClick={() => {
-                          const newMetadata = { ...uploadMetadata };
-                          delete newMetadata[key];
-                          setUploadMetadata(newMetadata);
-                        }}
+                {/* Editable metadata fields */}
+                {metadataFields.length > 0 && (
+                  <div className="space-y-2">
+                    {metadataFields.map((field) => (
+                      <div
+                        key={field.id}
+                        className="p-2 border rounded-md bg-muted/20"
                       >
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Editable metadata fields */}
-              {metadataFields.length > 0 && (
-                <div className="space-y-2">
-                  {metadataFields.map((field) => (
-                    <div
-                      key={field.id}
-                      className="p-2 border rounded-md bg-muted/20"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="relative flex-1">
-                          <Popover
-                            open={field.showPresets}
-                            onOpenChange={(open) => {
+                        <div className="flex items-center gap-2">
+                          <div className="relative flex-1">
+                            <Popover
+                              open={field.showPresets}
+                              onOpenChange={(open) => {
+                                setMetadataFields((prev) =>
+                                  prev.map((f) =>
+                                    f.id === field.id
+                                      ? { ...f, showPresets: open }
+                                      : f
+                                  )
+                                );
+                              }}
+                            >
+                              <PopoverAnchor asChild>
+                                <div className="w-full" data-popover-anchor>
+                                  <Input
+                                    placeholder="Key (e.g., project, department)"
+                                    value={field.key}
+                                    onChange={(e) => {
+                                      setMetadataFields((prev) =>
+                                        prev.map((f) =>
+                                          f.id === field.id
+                                            ? {
+                                                ...f,
+                                                key: e.target.value,
+                                                showPresets: false,
+                                              }
+                                            : f
+                                        )
+                                      );
+                                    }}
+                                    onFocus={() => {
+                                      setMetadataFields((prev) =>
+                                        prev.map((f) =>
+                                          f.id === field.id
+                                            ? { ...f, showPresets: true }
+                                            : f
+                                        )
+                                      );
+                                    }}
+                                    className={`flex-1 w-full ${field.showPresets ? 'border-primary' : ''}`}
+                                  />
+                                </div>
+                              </PopoverAnchor>
+                              <PopoverContent
+                                className="p-0"
+                                align="start"
+                                side="bottom"
+                                sideOffset={4}
+                                style={{
+                                  width:
+                                    'var(--radix-popover-anchor-width, 100%)',
+                                  minWidth: 'var(--radix-popover-anchor-width)',
+                                }}
+                              >
+                                <Command>
+                                  <CommandList>
+                                    <CommandGroup heading="Quick presets">
+                                      {[
+                                        {
+                                          key: 'project',
+                                          label: 'Project',
+                                          example: 'My Project',
+                                        },
+                                        {
+                                          key: 'department',
+                                          label: 'Department',
+                                          example: 'Engineering',
+                                        },
+                                        {
+                                          key: 'category',
+                                          label: 'Category',
+                                          example: 'Documentation',
+                                        },
+                                        {
+                                          key: 'version',
+                                          label: 'Version',
+                                          example: '1.0.0',
+                                        },
+                                        {
+                                          key: 'author',
+                                          label: 'Author',
+                                          example: 'John Doe',
+                                        },
+                                        {
+                                          key: 'tags',
+                                          label: 'Tags',
+                                          example: 'important, draft',
+                                        },
+                                        {
+                                          key: 'source',
+                                          label: 'Source',
+                                          example: 'Internal',
+                                        },
+                                      ].map((preset) => (
+                                        <CommandItem
+                                          key={preset.key}
+                                          value={`${preset.label} ${preset.example}`}
+                                          onSelect={() => {
+                                            setMetadataFields((prev) =>
+                                              prev.map((f) =>
+                                                f.id === field.id
+                                                  ? {
+                                                      ...f,
+                                                      key: preset.key,
+                                                      value: '',
+                                                      placeholder:
+                                                        preset.example,
+                                                      showPresets: false,
+                                                    }
+                                                  : f
+                                              )
+                                            );
+                                          }}
+                                          className="cursor-pointer"
+                                        >
+                                          <span className="font-medium">
+                                            {preset.label}
+                                          </span>
+                                          <span className="text-muted-foreground ml-2">
+                                            ({preset.example})
+                                          </span>
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                          <Input
+                            placeholder={field.placeholder || 'Value'}
+                            value={field.value}
+                            onChange={(e) => {
                               setMetadataFields((prev) =>
                                 prev.map((f) =>
                                   f.id === field.id
-                                    ? { ...f, showPresets: open }
+                                    ? {
+                                        ...f,
+                                        value: e.target.value,
+                                        placeholder: '',
+                                      }
                                     : f
                                 )
                               );
                             }}
+                            onFocus={() => {
+                              if (field.placeholder && !field.value) {
+                                setMetadataFields((prev) =>
+                                  prev.map((f) =>
+                                    f.id === field.id
+                                      ? { ...f, placeholder: '' }
+                                      : f
+                                  )
+                                );
+                              }
+                            }}
+                            className="flex-1"
+                            onKeyDown={(e) => {
+                              if (
+                                e.key === 'Enter' &&
+                                field.key.trim() &&
+                                (field.value.trim() || field.placeholder.trim())
+                              ) {
+                                const valueToUse =
+                                  field.value.trim() ||
+                                  field.placeholder.trim();
+                                setUploadMetadata((prev) => ({
+                                  ...prev,
+                                  [field.key.trim()]: valueToUse,
+                                }));
+                                setMetadataFields((prev) =>
+                                  prev.filter((f) => f.id !== field.id)
+                                );
+                              } else if (e.key === 'Escape') {
+                                setMetadataFields((prev) =>
+                                  prev.filter((f) => f.id !== field.id)
+                                );
+                              }
+                            }}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 flex-shrink-0"
+                            onClick={() => {
+                              setMetadataFields((prev) =>
+                                prev.filter((f) => f.id !== field.id)
+                              );
+                            }}
                           >
-                            <PopoverAnchor asChild>
-                              <div className="w-full" data-popover-anchor>
-                                <Input
-                                  placeholder="Key (e.g., project, department)"
-                                  value={field.key}
-                                  onChange={(e) => {
-                                    setMetadataFields((prev) =>
-                                      prev.map((f) =>
-                                        f.id === field.id
-                                          ? {
-                                              ...f,
-                                              key: e.target.value,
-                                              showPresets: false,
-                                            }
-                                          : f
-                                      )
-                                    );
-                                  }}
-                                  onFocus={() => {
-                                    setMetadataFields((prev) =>
-                                      prev.map((f) =>
-                                        f.id === field.id
-                                          ? { ...f, showPresets: true }
-                                          : f
-                                      )
-                                    );
-                                  }}
-                                  className={`flex-1 w-full ${field.showPresets ? 'border-primary' : ''}`}
-                                />
-                              </div>
-                            </PopoverAnchor>
-                            <PopoverContent
-                              className="p-0"
-                              align="start"
-                              side="bottom"
-                              sideOffset={4}
-                              style={{
-                                width:
-                                  'var(--radix-popover-anchor-width, 100%)',
-                                minWidth: 'var(--radix-popover-anchor-width)',
-                              }}
-                            >
-                              <Command>
-                                <CommandList>
-                                  <CommandGroup heading="Quick presets">
-                                    {[
-                                      {
-                                        key: 'project',
-                                        label: 'Project',
-                                        example: 'My Project',
-                                      },
-                                      {
-                                        key: 'department',
-                                        label: 'Department',
-                                        example: 'Engineering',
-                                      },
-                                      {
-                                        key: 'category',
-                                        label: 'Category',
-                                        example: 'Documentation',
-                                      },
-                                      {
-                                        key: 'version',
-                                        label: 'Version',
-                                        example: '1.0.0',
-                                      },
-                                      {
-                                        key: 'author',
-                                        label: 'Author',
-                                        example: 'John Doe',
-                                      },
-                                      {
-                                        key: 'tags',
-                                        label: 'Tags',
-                                        example: 'important, draft',
-                                      },
-                                      {
-                                        key: 'source',
-                                        label: 'Source',
-                                        example: 'Internal',
-                                      },
-                                    ].map((preset) => (
-                                      <CommandItem
-                                        key={preset.key}
-                                        value={`${preset.label} ${preset.example}`}
-                                        onSelect={() => {
-                                          setMetadataFields((prev) =>
-                                            prev.map((f) =>
-                                              f.id === field.id
-                                                ? {
-                                                    ...f,
-                                                    key: preset.key,
-                                                    value: '',
-                                                    placeholder: preset.example,
-                                                    showPresets: false,
-                                                  }
-                                                : f
-                                            )
-                                          );
-                                        }}
-                                        className="cursor-pointer"
-                                      >
-                                        <span className="font-medium">
-                                          {preset.label}
-                                        </span>
-                                        <span className="text-muted-foreground ml-2">
-                                          ({preset.example})
-                                        </span>
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
-                                </CommandList>
-                              </Command>
-                            </PopoverContent>
-                          </Popover>
+                            <X className="h-4 w-4" />
+                          </Button>
                         </div>
-                        <Input
-                          placeholder={field.placeholder || 'Value'}
-                          value={field.value}
-                          onChange={(e) => {
-                            setMetadataFields((prev) =>
-                              prev.map((f) =>
-                                f.id === field.id
-                                  ? {
-                                      ...f,
-                                      value: e.target.value,
-                                      placeholder: '',
-                                    }
-                                  : f
-                              )
-                            );
-                          }}
-                          onFocus={() => {
-                            if (field.placeholder && !field.value) {
-                              setMetadataFields((prev) =>
-                                prev.map((f) =>
-                                  f.id === field.id
-                                    ? { ...f, placeholder: '' }
-                                    : f
-                                )
-                              );
-                            }
-                          }}
-                          className="flex-1"
-                          onKeyDown={(e) => {
-                            if (
-                              e.key === 'Enter' &&
-                              field.key.trim() &&
-                              (field.value.trim() || field.placeholder.trim())
-                            ) {
-                              const valueToUse =
-                                field.value.trim() || field.placeholder.trim();
-                              setUploadMetadata((prev) => ({
-                                ...prev,
-                                [field.key.trim()]: valueToUse,
-                              }));
-                              setMetadataFields((prev) =>
-                                prev.filter((f) => f.id !== field.id)
-                              );
-                            } else if (e.key === 'Escape') {
-                              setMetadataFields((prev) =>
-                                prev.filter((f) => f.id !== field.id)
-                              );
-                            }
-                          }}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-9 w-9 flex-shrink-0"
-                          onClick={() => {
-                            setMetadataFields((prev) =>
-                              prev.filter((f) => f.id !== field.id)
-                            );
-                          }}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-            {/* Upload Progress - Detailed per-file status */}
-            {isUploading && uploadFiles.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">Upload Progress</span>
-                  <span className="text-muted-foreground">
-                    {Math.round(uploadProgress)}%
-                  </span>
-                </div>
-                <Progress value={uploadProgress} className="h-2" />
+              {/* Upload Progress - Detailed per-file status */}
+              {isUploading && uploadFiles.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">Upload Progress</span>
+                    <span className="text-muted-foreground">
+                      {Math.round(uploadProgress)}%
+                    </span>
+                  </div>
+                  <Progress value={uploadProgress} className="h-2" />
 
-                {/* Per-file status */}
-                <ScrollArea className="h-40 rounded-md border p-3">
-                  <div className="space-y-2">
-                    {uploadFiles.map((file, index) => {
-                      const status = fileUploadStatus[file.name];
-                      if (!status) return null;
+                  {/* Per-file status */}
+                  <ScrollArea className="h-40 rounded-md border p-3">
+                    <div className="space-y-2">
+                      {uploadFiles.map((file, index) => {
+                        const status = fileUploadStatus[file.name];
+                        if (!status) return null;
 
-                      return (
-                        <div key={index} className="space-y-1">
-                          <div className="flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                              {status.status === 'success' && (
-                                <div className="h-2 w-2 rounded-full bg-green-500 flex-shrink-0" />
-                              )}
-                              {status.status === 'error' && (
-                                <div className="h-2 w-2 rounded-full bg-red-500 flex-shrink-0" />
-                              )}
-                              {(status.status === 'uploading' ||
-                                status.status === 'pending') && (
-                                <Loader2 className="h-3 w-3 animate-spin text-primary flex-shrink-0" />
-                              )}
-                              <span className="truncate font-medium">
-                                {file.name}
+                        return (
+                          <div key={index} className="space-y-1">
+                            <div className="flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                {status.status === 'success' && (
+                                  <div className="h-2 w-2 rounded-full bg-green-500 flex-shrink-0" />
+                                )}
+                                {status.status === 'error' && (
+                                  <div className="h-2 w-2 rounded-full bg-red-500 flex-shrink-0" />
+                                )}
+                                {(status.status === 'uploading' ||
+                                  status.status === 'pending') && (
+                                  <Loader2 className="h-3 w-3 animate-spin text-primary flex-shrink-0" />
+                                )}
+                                <span className="truncate font-medium">
+                                  {file.name}
+                                </span>
+                              </div>
+                              <span className="text-muted-foreground flex-shrink-0 ml-2">
+                                {status.status === 'success'
+                                  ? 'Done'
+                                  : status.status === 'error'
+                                    ? 'Failed'
+                                    : status.status === 'uploading'
+                                      ? `${Math.round(status.progress)}%`
+                                      : 'Pending'}
                               </span>
                             </div>
-                            <span className="text-muted-foreground flex-shrink-0 ml-2">
-                              {status.status === 'success'
-                                ? 'Done'
-                                : status.status === 'error'
-                                  ? 'Failed'
-                                  : status.status === 'uploading'
-                                    ? `${Math.round(status.progress)}%`
-                                    : 'Pending'}
-                            </span>
+                            {(status.status === 'uploading' ||
+                              status.status === 'pending') && (
+                              <Progress
+                                value={status.progress}
+                                className="h-1"
+                              />
+                            )}
+                            {status.status === 'error' && status.error && (
+                              <p className="text-xs text-red-500 truncate">
+                                {status.error}
+                              </p>
+                            )}
                           </div>
-                          {(status.status === 'uploading' ||
-                            status.status === 'pending') && (
-                            <Progress value={status.progress} className="h-1" />
-                          )}
-                          {status.status === 'error' && status.error && (
-                            <p className="text-xs text-red-500 truncate">
-                              {status.error}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </ScrollArea>
-              </div>
-            )}
-          </div>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
 
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                // Cancel any ongoing upload
-                if (isUploading && uploadAbortController) {
-                  uploadAbortController.abort();
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    // Cancel any ongoing upload
+                    if (isUploading && uploadAbortController) {
+                      uploadAbortController.abort();
+                    }
+                    setUploadModalOpen(false);
+                    setUploadFiles([]);
+                    setUploadMetadata({});
+                    setUploadProgress(0);
+                    setUploadingFile('');
+                    setUploadQuality('hi-res'); // Reset to default
+                    setMetadataFields([]);
+                    setFileUploadStatus({});
+                    setIsUploading(false);
+                    setUploadAbortController(null);
+                    // Reset collections - will be set by useEffect if collection is selected
+                    if (selectedCollectionId) {
+                      setUploadCollectionIds([selectedCollectionId]);
+                    } else {
+                      setUploadCollectionIds([]);
+                    }
+                  }}
+                  disabled={isUploading}
+                >
+                  {isUploading ? 'Close' : 'Cancel'}
+                </Button>
+                {isUploading ? (
+                  <Button variant="destructive" onClick={handleCancelUpload}>
+                    <X className="h-4 w-4 mr-2" />
+                    Cancel Upload
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleFileUpload}
+                    disabled={uploadFiles.length === 0 || isUploading}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload{' '}
+                    {uploadFiles.length > 0 &&
+                      `${uploadFiles.length} file${uploadFiles.length !== 1 ? 's' : ''}`}
+                  </Button>
+                )}
+              </DialogFooter>
+            </TabsContent>
+
+            <TabsContent value="url" className="space-y-6 py-4">
+              <UrlUploadTab
+                onUpload={(files) => {
+                  // Add URL-fetched files to uploadFiles state
+                  setUploadFiles((prev) => [...prev, ...files]);
+                }}
+                onSwitchToFileTab={() => setUploadActiveTab('file')}
+                isUploading={isUploading}
+                renderCollectionsSelect={
+                  /* Collection Selection - Same as File Upload */
+                  <>
+                    <label className="text-sm font-medium">Collections</label>
+                    <MultiSelect
+                      id="upload-collections-url"
+                      options={[
+                        ...collections.map((collection) => ({
+                          value: collection.id,
+                          label: collection.name || collection.id,
+                        })),
+                      ]}
+                      value={uploadCollectionIds}
+                      onChange={setUploadCollectionIds}
+                      onCreateNew={async (name: string) => {
+                        try {
+                          const client = await getClient();
+                          if (!client) {
+                            throw new Error(
+                              'Failed to get authenticated client'
+                            );
+                          }
+
+                          const newCollection = await client.collections.create(
+                            {
+                              name: name,
+                            }
+                          );
+
+                          const collectionId = newCollection.results.id;
+                          const collectionName =
+                            newCollection.results.name || collectionId;
+
+                          // Refresh collections list
+                          onCollectionChange();
+
+                          toast({
+                            title: 'Success',
+                            description: `Collection "${collectionName}" created successfully.`,
+                          });
+
+                          return { id: collectionId, name: collectionName };
+                        } catch (error: any) {
+                          console.error('Error creating collection:', error);
+                          toast({
+                            title: 'Error',
+                            description:
+                              error?.message || 'Failed to create collection.',
+                            variant: 'destructive',
+                          });
+                          return null;
+                        }
+                      }}
+                    />
+                    {uploadCollectionIds.length === 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        If no collection is selected, documents will be added to
+                        "All Documents"
+                      </p>
+                    )}
+                  </>
                 }
-                setUploadModalOpen(false);
-                setUploadFiles([]);
-                setUploadMetadata({});
-                setUploadProgress(0);
-                setUploadingFile('');
-                setUploadQuality('hi-res'); // Reset to default
-                setMetadataFields([]);
-                setFileUploadStatus({});
-                setIsUploading(false);
-                setUploadAbortController(null);
-                // Reset collections - will be set by useEffect if collection is selected
-                if (selectedCollectionId) {
-                  setUploadCollectionIds([selectedCollectionId]);
-                } else {
-                  setUploadCollectionIds([]);
+                renderQualitySelect={
+                  /* Quality Selection - Same as File Upload */
+                  <>
+                    <label className="text-sm font-medium">
+                      Upload Quality
+                    </label>
+                    <Select
+                      value={uploadQuality}
+                      onValueChange={setUploadQuality}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="hi-res">
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="h-4 w-4 text-yellow-500" />
+                            <span>Maximum Quality (hi-res)</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="fast">
+                          <div className="flex items-center gap-2">
+                            <Upload className="h-4 w-4 text-blue-500" />
+                            <span>Fast (fast)</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="custom">
+                          <div className="flex items-center gap-2">
+                            <Edit className="h-4 w-4 text-purple-500" />
+                            <span>Custom (custom)</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {uploadQuality === 'hi-res' &&
+                        'Maximum quality ensures best extraction and embedding results'}
+                      {uploadQuality === 'fast' &&
+                        'Faster processing with slightly lower quality'}
+                      {uploadQuality === 'custom' &&
+                        'Custom ingestion configuration'}
+                    </p>
+                  </>
                 }
-              }}
-              disabled={isUploading}
-            >
-              {isUploading ? 'Close' : 'Cancel'}
-            </Button>
-            {isUploading ? (
-              <Button variant="destructive" onClick={handleCancelUpload}>
-                <X className="h-4 w-4 mr-2" />
-                Cancel Upload
-              </Button>
-            ) : (
-              <Button
-                onClick={handleFileUpload}
-                disabled={uploadFiles.length === 0 || isUploading}
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                Upload{' '}
-                {uploadFiles.length > 0 &&
-                  `${uploadFiles.length} file${uploadFiles.length !== 1 ? 's' : ''}`}
-              </Button>
-            )}
-          </DialogFooter>
+                renderMetadataFields={
+                  /* Metadata Fields - Simplified version for URL Upload */
+                  <>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <label className="text-sm font-medium">Metadata</label>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle
+                                className="h-3.5 w-3.5 text-muted-foreground cursor-help"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                              <p className="text-xs">
+                                Add custom metadata to help organize and filter
+                                your documents. Metadata applies to all fetched
+                                files and can be used for filtering, searching,
+                                and categorization.
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <p className="text-xs text-muted-foreground ml-2">
+                          Add key-value pairs to organize and filter documents.
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9 px-3 border-2 border-primary text-primary bg-transparent hover:bg-primary/10 font-semibold"
+                        onClick={() => {
+                          const newFieldId = crypto.randomUUID();
+                          setMetadataFields((prev) => [
+                            ...prev,
+                            {
+                              id: newFieldId,
+                              key: '',
+                              value: '',
+                              placeholder: '',
+                              showPresets: false,
+                            },
+                          ]);
+                        }}
+                      >
+                        <Plus className="h-4 w-4 mr-1.5" />
+                        Add metadata
+                      </Button>
+                    </div>
+
+                    {/* Existing metadata entries */}
+                    {Object.entries(uploadMetadata).length > 0 && (
+                      <div className="space-y-2">
+                        {Object.entries(uploadMetadata).map(([key, value]) => (
+                          <div
+                            key={key}
+                            className="flex items-center gap-2 p-2 border rounded-md bg-muted/30"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-medium text-muted-foreground mb-0.5">
+                                {key}
+                              </div>
+                              <div className="text-sm truncate">{value}</div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 flex-shrink-0"
+                              onClick={() => {
+                                const newMetadata = { ...uploadMetadata };
+                                delete newMetadata[key];
+                                setUploadMetadata(newMetadata);
+                              }}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Editable metadata fields - simplified for URL */}
+                    {metadataFields.length > 0 && (
+                      <div className="space-y-2">
+                        {metadataFields.map((field) => (
+                          <div
+                            key={field.id}
+                            className="p-2 border rounded-md bg-muted/20"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Input
+                                placeholder="Key"
+                                value={field.key}
+                                onChange={(e) => {
+                                  setMetadataFields((prev) =>
+                                    prev.map((f) =>
+                                      f.id === field.id
+                                        ? { ...f, key: e.target.value }
+                                        : f
+                                    )
+                                  );
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    const key = field.key.trim();
+                                    const value = field.value.trim();
+                                    if (key && value) {
+                                      setUploadMetadata((prev) => ({
+                                        ...prev,
+                                        [key]: value,
+                                      }));
+                                      setMetadataFields((prev) =>
+                                        prev.filter((f) => f.id !== field.id)
+                                      );
+                                    }
+                                  }
+                                }}
+                                className="flex-1"
+                              />
+                              <Input
+                                placeholder="Value"
+                                value={field.value}
+                                onChange={(e) => {
+                                  setMetadataFields((prev) =>
+                                    prev.map((f) =>
+                                      f.id === field.id
+                                        ? { ...f, value: e.target.value }
+                                        : f
+                                    )
+                                  );
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    const key = field.key.trim();
+                                    const value = field.value.trim();
+                                    if (key && value) {
+                                      setUploadMetadata((prev) => ({
+                                        ...prev,
+                                        [key]: value,
+                                      }));
+                                      setMetadataFields((prev) =>
+                                        prev.filter((f) => f.id !== field.id)
+                                      );
+                                    }
+                                  }
+                                }}
+                                className="flex-1"
+                              />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 flex-shrink-0"
+                                onClick={() => {
+                                  setMetadataFields((prev) =>
+                                    prev.filter((f) => f.id !== field.id)
+                                  );
+                                }}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                }
+              />
+            </TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
 

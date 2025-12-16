@@ -1,5 +1,5 @@
-import { useEffect, useRef, useCallback } from 'react';
 import { DocumentResponse } from 'r2r-js';
+import { useEffect, useRef, useCallback } from 'react';
 
 import { useUserContext } from '@/context/UserContext';
 import logger from '@/lib/logger';
@@ -93,7 +93,9 @@ export function useDocumentPolling(
 
       const results = await Promise.all(promises);
       const documents = results
-        .filter((result): result is { results: DocumentResponse } => result !== null)
+        .filter(
+          (result): result is { results: DocumentResponse } => result !== null
+        )
         .map((result) => result.results);
 
       // Сбрасываем счетчик ошибок при успехе
