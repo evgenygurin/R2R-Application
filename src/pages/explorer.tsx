@@ -53,6 +53,8 @@ import {
   BulkActionsBar,
   BulkAction,
 } from '@/components/explorer/BulkActionsBar';
+import { CollectionActionDialog } from '@/components/explorer/CollectionActionDialog';
+import { DeleteConfirmDialog } from '@/components/explorer/DeleteConfirmDialog';
 import { DocumentDetailsDialog } from '@/components/explorer/DocumentDetailsDialog';
 import { ExplorerBreadcrumb } from '@/components/explorer/ExplorerBreadcrumb';
 import { ExplorerSidebar } from '@/components/explorer/ExplorerSidebar';
@@ -2109,180 +2111,61 @@ function FileManager({
       </Dialog>
 
       {/* Delete Modal */}
-      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirm Deletion</DialogTitle>
-            <DialogDescription>
-              {selectedFiles.length > 0
-                ? `Are you sure you want to delete ${selectedFiles.length} selected item${selectedFiles.length !== 1 ? 's' : ''}?`
-                : `Are you sure you want to delete "${activeFile?.title || activeFile?.id}"?`}
-              <br />
-              This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setDeleteModalOpen(false);
-                setActiveFile(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={async () => {
-                if (selectedFiles.length > 0) {
-                  await bulkDelete();
-                  setDeleteModalOpen(false);
-                } else {
-                  deleteFiles();
-                }
-              }}
-            >
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DeleteConfirmDialog
+        open={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setActiveFile(null);
+        }}
+        onConfirm={async () => {
+          if (selectedFiles.length > 0) {
+            await bulkDelete();
+            setDeleteModalOpen(false);
+          } else {
+            deleteFiles();
+          }
+        }}
+        selectedCount={selectedFiles.length}
+        activeFile={activeFile}
+      />
 
       {/* Move Modal */}
-      <Dialog open={moveModalOpen} onOpenChange={setMoveModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              Move {selectedFiles.length} item
-              {selectedFiles.length !== 1 ? 's' : ''}
-            </DialogTitle>
-            <DialogDescription>
-              Select a destination collection.
-            </DialogDescription>
-          </DialogHeader>
-
-          <ScrollArea className="h-[300px] rounded-md border p-4">
-            <div className="space-y-2">
-              {collections.map((collection) => (
-                <div
-                  key={collection.id}
-                  className={`flex items-center space-x-2 p-2 rounded-md hover:bg-muted cursor-pointer ${
-                    selectedCollectionForAction === collection.id
-                      ? 'bg-primary/10 border border-primary'
-                      : ''
-                  }`}
-                  onClick={() => setSelectedCollectionForAction(collection.id)}
-                >
-                  <Folder className="h-5 w-5 text-blue-500" />
-                  <span className="flex-1">{collection.name}</span>
-                  {selectedCollectionForAction === collection.id && (
-                    <div className="h-2 w-2 rounded-full bg-primary" />
-                  )}
-                </div>
-              ))}
-              {collections.length === 0 && (
-                <div className="text-center text-muted-foreground py-8">
-                  No collections available
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setMoveModalOpen(false);
-                setSelectedCollectionForAction(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={async () => {
-                if (selectedCollectionForAction) {
-                  await bulkMove(
-                    selectedCollectionForAction,
-                    selectedCollectionId
-                  );
-                  setMoveModalOpen(false);
-                  setSelectedCollectionForAction(null);
-                }
-              }}
-              disabled={!selectedCollectionForAction}
-            >
-              Move Here
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CollectionActionDialog
+        open={moveModalOpen}
+        onClose={() => {
+          setMoveModalOpen(false);
+          setSelectedCollectionForAction(null);
+        }}
+        onConfirm={async (collectionId) => {
+          await bulkMove(collectionId, selectedCollectionId);
+          setMoveModalOpen(false);
+          setSelectedCollectionForAction(null);
+        }}
+        actionType="move"
+        collections={collections}
+        selectedCollectionId={selectedCollectionForAction}
+        onCollectionSelect={setSelectedCollectionForAction}
+        selectedCount={selectedFiles.length}
+      />
 
       {/* Copy Modal */}
-      <Dialog open={copyModalOpen} onOpenChange={setCopyModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              Copy {selectedFiles.length} item
-              {selectedFiles.length !== 1 ? 's' : ''}
-            </DialogTitle>
-            <DialogDescription>
-              Select a destination collection to copy documents to.
-            </DialogDescription>
-          </DialogHeader>
-
-          <ScrollArea className="h-[300px] rounded-md border p-4">
-            <div className="space-y-2">
-              {collections.map((collection) => (
-                <div
-                  key={collection.id}
-                  className={`flex items-center space-x-2 p-2 rounded-md hover:bg-muted cursor-pointer ${
-                    selectedCollectionForAction === collection.id
-                      ? 'bg-primary/10 border border-primary'
-                      : ''
-                  }`}
-                  onClick={() => setSelectedCollectionForAction(collection.id)}
-                >
-                  <Folder className="h-5 w-5 text-blue-500" />
-                  <span className="flex-1">{collection.name}</span>
-                  {selectedCollectionForAction === collection.id && (
-                    <div className="h-2 w-2 rounded-full bg-primary" />
-                  )}
-                </div>
-              ))}
-              {collections.length === 0 && (
-                <div className="text-center text-muted-foreground py-8">
-                  No collections available
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setCopyModalOpen(false);
-                setSelectedCollectionForAction(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={async () => {
-                if (selectedCollectionForAction) {
-                  await bulkCopy(selectedCollectionForAction);
-                  setCopyModalOpen(false);
-                  setSelectedCollectionForAction(null);
-                }
-              }}
-              disabled={!selectedCollectionForAction}
-            >
-              Copy Here
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CollectionActionDialog
+        open={copyModalOpen}
+        onClose={() => {
+          setCopyModalOpen(false);
+          setSelectedCollectionForAction(null);
+        }}
+        onConfirm={async (collectionId) => {
+          await bulkCopy(collectionId);
+          setCopyModalOpen(false);
+          setSelectedCollectionForAction(null);
+        }}
+        actionType="copy"
+        collections={collections}
+        selectedCollectionId={selectedCollectionForAction}
+        onCollectionSelect={setSelectedCollectionForAction}
+        selectedCount={selectedFiles.length}
+      />
 
       {/* Create Collection and Move Modal */}
       <Dialog
