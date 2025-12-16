@@ -56,10 +56,17 @@ import {
 import { CollectionActionDialog } from '@/components/explorer/CollectionActionDialog';
 import { DeleteConfirmDialog } from '@/components/explorer/DeleteConfirmDialog';
 import { DocumentDetailsDialog } from '@/components/explorer/DocumentDetailsDialog';
+import { EmptyState } from '@/components/explorer/EmptyState';
 import { ExplorerBreadcrumb } from '@/components/explorer/ExplorerBreadcrumb';
 import { ExplorerSidebar } from '@/components/explorer/ExplorerSidebar';
+import { FileDropzone } from '@/components/explorer/FileDropzone';
+import { FileGridView } from '@/components/explorer/FileGridView';
+import { FileTableView, SortConfig } from '@/components/explorer/FileTableView';
+import { FileUploadList } from '@/components/explorer/FileUploadList';
+import { MetadataEditor } from '@/components/explorer/MetadataEditor';
 import { SearchBar } from '@/components/explorer/SearchBar';
 import { StatusFilter } from '@/components/explorer/StatusFilter';
+import { UploadConfigForm } from '@/components/explorer/UploadConfigForm';
 import { UrlUploadTab } from '@/components/explorer/UrlUploadTab';
 import { Navbar } from '@/components/shared/NavBar';
 import { Badge } from '@/components/ui/badge';
@@ -159,10 +166,7 @@ function FileManager({
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [sortConfig, setSortConfig] = useState<{
-    key: string;
-    direction: 'asc' | 'desc';
-  } | null>(null);
+  const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [filters, setFilters] = useState<{
     ingestionStatus: string[];
     extractionStatus: string[];
@@ -780,389 +784,55 @@ function FileManager({
           onValueChange={(value) => setViewMode(value as 'list' | 'grid')}
         >
           <TabsContent value="list" className="m-0">
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="text-muted-foreground">Loading...</div>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[40px]">
-                      <Checkbox
-                        checked={
-                          selectedFiles.length === filteredFiles.length &&
-                          filteredFiles.length > 0
-                        }
-                        onCheckedChange={toggleSelectAll}
-                        aria-label="Select all"
-                        disabled={filteredFiles.length === 0}
-                      />
-                    </TableHead>
-                    <TableHead
-                      className="w-[300px] cursor-pointer"
-                      onClick={() => handleSort('name')}
-                    >
-                      <div className="flex items-center gap-2">
-                        Name
-                        {sortConfig?.key === 'name' &&
-                          (sortConfig.direction === 'asc' ? (
-                            <ArrowUp className="h-4 w-4" />
-                          ) : (
-                            <ArrowDown className="h-4 w-4" />
-                          ))}
-                        {sortConfig?.key !== 'name' && (
-                          <ArrowUpDown className="h-4 w-4 opacity-50" />
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead
-                      className="cursor-pointer"
-                      onClick={() => handleSort('size')}
-                    >
-                      <div className="flex items-center gap-2">
-                        Size
-                        {sortConfig?.key === 'size' &&
-                          (sortConfig.direction === 'asc' ? (
-                            <ArrowUp className="h-4 w-4" />
-                          ) : (
-                            <ArrowDown className="h-4 w-4" />
-                          ))}
-                        {sortConfig?.key !== 'size' && (
-                          <ArrowUpDown className="h-4 w-4 opacity-50" />
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead
-                      className="cursor-pointer"
-                      onClick={() => handleSort('modified')}
-                    >
-                      <div className="flex items-center gap-2">
-                        Modified
-                        {sortConfig?.key === 'modified' &&
-                          (sortConfig.direction === 'asc' ? (
-                            <ArrowUp className="h-4 w-4" />
-                          ) : (
-                            <ArrowDown className="h-4 w-4" />
-                          ))}
-                        {sortConfig?.key !== 'modified' && (
-                          <ArrowUpDown className="h-4 w-4 opacity-50" />
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead className="w-[150px] !px-2 !py-1">
-                      <div className="flex items-center gap-2">
-                        <span>Ingestion</span>
-                        <StatusFilter
-                          title="Ingestion Status"
-                          availableStatuses={DEFAULT_INGESTION_STATUSES}
-                          selectedStatuses={filters.ingestionStatus}
-                          onStatusChange={(statuses) =>
-                            setFilters((prev) => ({
-                              ...prev,
-                              ingestionStatus: statuses,
-                            }))
-                          }
-                          onClear={() =>
-                            setFilters((prev) => ({
-                              ...prev,
-                              ingestionStatus: [],
-                            }))
-                          }
-                        />
-                      </div>
-                    </TableHead>
-                    <TableHead className="w-[150px] !px-2 !py-1">
-                      <div className="flex items-center gap-2">
-                        <span>Extraction</span>
-                        <StatusFilter
-                          title="Extraction Status"
-                          availableStatuses={DEFAULT_EXTRACTION_STATUSES}
-                          selectedStatuses={filters.extractionStatus}
-                          onStatusChange={(statuses) =>
-                            setFilters((prev) => ({
-                              ...prev,
-                              extractionStatus: statuses,
-                            }))
-                          }
-                          onClear={() =>
-                            setFilters((prev) => ({
-                              ...prev,
-                              extractionStatus: [],
-                            }))
-                          }
-                        />
-                      </div>
-                    </TableHead>
-                    <TableHead className="w-[80px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredFiles.length > 0 ? (
-                    filteredFiles.map((file) => (
-                      <TableRow
-                        key={file.id}
-                        className={`table-row-hover ${
-                          selectedFiles.includes(file.id)
-                            ? 'bg-primary/10 dark:bg-primary/20'
-                            : ''
-                        }`}
-                      >
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedFiles.includes(file.id)}
-                            onCheckedChange={() => toggleSelection(file.id)}
-                            aria-label={`Select ${file.title || file.id}`}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <div
-                            className="flex items-center space-x-2 cursor-pointer"
-                            onClick={() => handleFileAction('open', file)}
-                          >
-                            {getFileIcon(file)}
-                            <span className="font-medium font-mono text-sm">
-                              {file.title || file.id}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm text-muted-foreground">
-                            {formatFileSize(
-                              (file as any).sizeInBytes ||
-                                (file as any).size_in_bytes
-                            )}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm text-muted-foreground">
-                            {formatDateLocal(file.updatedAt || file.createdAt)}
-                          </span>
-                        </TableCell>
-                        <TableCell className="w-[200px] min-w-[180px]">
-                          <div className="flex justify-start">
-                            {getStatusBadge(file.ingestionStatus, 'ingestion')}
-                          </div>
-                        </TableCell>
-                        <TableCell className="w-[200px] min-w-[180px]">
-                          <div className="flex justify-start">
-                            {getStatusBadge(
-                              file.extractionStatus,
-                              'extraction'
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                                <span className="sr-only">Actions</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  handleFileAction('preview', file)
-                                }
-                              >
-                                <Eye className="h-4 w-4 mr-2" />
-                                Preview
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  handleFileAction('download', file)
-                                }
-                              >
-                                <Download className="h-4 w-4 mr-2" />
-                                Download
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => handleFileAction('rename', file)}
-                              >
-                                <Edit className="h-4 w-4 mr-2" />
-                                Rename
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleFileAction('move', file)}
-                              >
-                                <Move className="h-4 w-4 mr-2" />
-                                Move
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => handleFileAction('delete', file)}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={7} className="h-32 text-center">
-                        <div className="flex flex-col items-center justify-center py-8">
-                          <div className="rounded-full bg-muted p-3">
-                            <Folder className="h-6 w-6 text-muted-foreground" />
-                          </div>
-                          <h3 className="mt-4 text-lg font-semibold">
-                            No files found
-                          </h3>
-                          <p className="mt-2 text-sm text-muted-foreground text-center max-w-sm">
-                            {searchQuery
-                              ? `No results found for "${searchQuery}". Try a different search term.`
-                              : filters.ingestionStatus.length > 0 ||
-                                  filters.extractionStatus.length > 0
-                                ? 'No files match the selected filters. Try changing the filter criteria.'
-                                : 'This folder is empty. Upload a file to get started.'}
-                          </p>
-                          {(filters.ingestionStatus.length > 0 ||
-                            filters.extractionStatus.length > 0) && (
-                            <div className="mt-4">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setFilters((prev) => ({
-                                    ...prev,
-                                    ingestionStatus: [],
-                                    extractionStatus: [],
-                                  }));
-                                }}
-                              >
-                                <X className="h-4 w-4 mr-2" />
-                                Clear Filters
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            )}
+            <FileTableView
+              files={filteredFiles}
+              selectedFiles={selectedFiles}
+              loading={loading}
+              sortConfig={sortConfig}
+              availableIngestionStatuses={DEFAULT_INGESTION_STATUSES}
+              availableExtractionStatuses={DEFAULT_EXTRACTION_STATUSES}
+              selectedIngestionStatuses={filters.ingestionStatus}
+              selectedExtractionStatuses={filters.extractionStatus}
+              onFileSelect={toggleSelection}
+              onSelectAll={toggleSelectAll}
+              onSort={handleSort}
+              onFileAction={handleFileAction}
+              onIngestionStatusChange={(statuses) =>
+                setFilters((prev) => ({ ...prev, ingestionStatus: statuses }))
+              }
+              onExtractionStatusChange={(statuses) =>
+                setFilters((prev) => ({ ...prev, extractionStatus: statuses }))
+              }
+              onClearIngestionFilter={() =>
+                setFilters((prev) => ({ ...prev, ingestionStatus: [] }))
+              }
+              onClearExtractionFilter={() =>
+                setFilters((prev) => ({ ...prev, extractionStatus: [] }))
+              }
+              emptyState={{
+                searchQuery,
+                hasFilters:
+                  filters.ingestionStatus.length > 0 ||
+                  filters.extractionStatus.length > 0,
+                onUpload: () => setUploadModalOpen(true),
+                onClearFilters: () =>
+                  setFilters({ ingestionStatus: [], extractionStatus: [] }),
+              }}
+            />
           </TabsContent>
 
           <TabsContent value="grid" className="m-0">
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="text-muted-foreground">Loading...</div>
-              </div>
-            ) : filteredFiles.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4">
-                {filteredFiles.map((file) => (
-                  <div
-                    key={file.id}
-                    className={`relative group rounded-lg border bg-card p-2 transition-all hover:shadow-md ${
-                      selectedFiles.includes(file.id)
-                        ? 'ring-2 ring-primary'
-                        : ''
-                    }`}
-                  >
-                    <div className="absolute top-2 right-2">
-                      <Checkbox
-                        checked={selectedFiles.includes(file.id)}
-                        onCheckedChange={() => toggleSelection(file.id)}
-                        aria-label={`Select ${file.title || file.id}`}
-                      />
-                    </div>
-
-                    <div
-                      className="flex flex-col items-center p-4 cursor-pointer"
-                      onClick={() => handleFileAction('open', file)}
-                    >
-                      <div className="mb-2">{getFileIcon(file)}</div>
-                      <div className="text-center">
-                        <p className="font-medium font-mono text-sm truncate w-full max-w-[120px]">
-                          {file.title || file.id}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {file.documentType || 'document'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                            <span className="sr-only">Actions</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => handleFileAction('preview', file)}
-                          >
-                            <Eye className="h-4 w-4 mr-2" />
-                            Preview
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleFileAction('download', file)}
-                          >
-                            <Download className="h-4 w-4 mr-2" />
-                            Download
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => handleFileAction('rename', file)}
-                          >
-                            <Edit className="h-4 w-4 mr-2" />
-                            Rename
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleFileAction('move', file)}
-                          >
-                            <Move className="h-4 w-4 mr-2" />
-                            Move
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => handleFileAction('delete', file)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12">
-                <div className="rounded-full bg-muted p-3">
-                  <Folder className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <h3 className="mt-4 text-lg font-semibold">No files found</h3>
-                <p className="mt-2 text-sm text-muted-foreground text-center max-w-sm">
-                  {searchQuery
-                    ? `No results found for "${searchQuery}". Try a different search term.`
-                    : 'This folder is empty. Upload a file to get started.'}
-                </p>
-                <div className="mt-4 flex space-x-2">
-                  <Button size="sm" onClick={() => setUploadModalOpen(true)}>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload File
-                  </Button>
-                </div>
-              </div>
-            )}
+            <FileGridView
+              files={filteredFiles}
+              selectedFiles={selectedFiles}
+              loading={loading}
+              onFileSelect={toggleSelection}
+              onFileAction={handleFileAction}
+              emptyState={{
+                searchQuery,
+                onUpload: () => setUploadModalOpen(true),
+              }}
+            />
           </TabsContent>
         </Tabs>
       </CardContent>
@@ -1224,523 +894,69 @@ function FileManager({
             </TabsList>
 
             <TabsContent value="file" className="space-y-6 py-4">
-              {/* File Dropzone */}
-              <div
-                {...getRootProps()}
-                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-                  isDragActive
-                    ? 'border-primary bg-primary/5'
-                    : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/30'
-                }`}
-              >
-                <input {...getInputProps()} />
-                <div className="flex flex-col items-center">
-                  <Upload className="h-10 w-10 text-muted-foreground mb-4" />
-                  {isDragActive ? (
-                    <p className="text-sm font-medium">Drop files here...</p>
-                  ) : (
-                    <>
-                      <p className="text-sm font-medium mb-1">
-                        Drag and drop files here, or click to select
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Supports PDF, DOCX, TXT, JPG, PNG, and more
-                      </p>
-                    </>
-                  )}
-                </div>
-              </div>
+              <FileDropzone
+                onDrop={(acceptedFiles) => {
+                  const filtered = acceptedFiles.filter(
+                    (file) => file.size > 0
+                  );
+                  addFiles(filtered);
+                }}
+              />
 
-              {/* Selected Files List */}
-              {uploadFiles.length > 0 && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Selected Files ({uploadFiles.length})
-                  </label>
-                  <ScrollArea className="h-32 rounded-md border p-2">
-                    <div className="space-y-1">
-                      {uploadFiles.map((file, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center justify-between text-sm py-1 px-2 rounded hover:bg-muted/50"
-                        >
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                            <span className="truncate">{file.name}</span>
-                            <span className="text-xs text-muted-foreground flex-shrink-0">
-                              ({(file.size / 1024).toFixed(1)} KB)
-                            </span>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeUploadFile(file.name);
-                            }}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </div>
-              )}
+              <FileUploadList
+                files={uploadFiles}
+                uploadStatus={fileUploadStatus}
+                isUploading={isUploading}
+                overallProgress={uploadProgress}
+                onRemoveFile={removeUploadFile}
+                showDetailedStatus={isUploading}
+              />
 
-              {/* Collection Selection - MultiSelect */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Collections</label>
-                <MultiSelect
-                  id="upload-collections"
-                  options={[
-                    ...collections.map((collection) => ({
-                      value: collection.id,
-                      label: collection.name || collection.id,
-                    })),
-                  ]}
-                  value={uploadCollectionIds}
-                  onChange={setUploadCollectionIds}
-                  onCreateNew={async (name: string) => {
-                    try {
-                      const client = await getClient();
-                      if (!client) {
-                        throw new Error('Failed to get authenticated client');
-                      }
-
-                      const newCollection = await client.collections.create({
-                        name: name,
-                      });
-
-                      const collectionId = newCollection.results.id;
-                      const collectionName =
-                        newCollection.results.name || collectionId;
-
-                      // Refresh collections list
-                      onCollectionChange();
-
-                      toast({
-                        title: 'Success',
-                        description: `Collection "${collectionName}" created successfully.`,
-                      });
-
-                      return { id: collectionId, name: collectionName };
-                    } catch (error: any) {
-                      console.error('Error creating collection:', error);
-                      toast({
-                        title: 'Error',
-                        description:
-                          error?.message || 'Failed to create collection.',
-                        variant: 'destructive',
-                      });
-                      return null;
+              <UploadConfigForm
+                collections={collections}
+                selectedCollectionIds={uploadCollectionIds}
+                uploadQuality={uploadQuality}
+                metadata={uploadMetadata}
+                onCollectionsChange={setUploadCollectionIds}
+                onQualityChange={setUploadQuality}
+                onMetadataChange={setUploadMetadata}
+                onCreateCollection={async (name: string) => {
+                  try {
+                    const client = await getClient();
+                    if (!client) {
+                      throw new Error('Failed to get authenticated client');
                     }
-                  }}
-                />
-                {uploadCollectionIds.length === 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    If no collection is selected, documents will be added to
-                    "All Documents"
-                  </p>
-                )}
-              </div>
 
-              {/* Quality Selection */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Upload Quality</label>
-                <Select value={uploadQuality} onValueChange={setUploadQuality}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="hi-res">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="h-4 w-4 text-yellow-500" />
-                        <span>Maximum Quality (hi-res)</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="fast">
-                      <div className="flex items-center gap-2">
-                        <Upload className="h-4 w-4 text-blue-500" />
-                        <span>Fast (fast)</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="custom">
-                      <div className="flex items-center gap-2">
-                        <Edit className="h-4 w-4 text-purple-500" />
-                        <span>Custom (custom)</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  {uploadQuality === 'hi-res' &&
-                    'Maximum quality ensures best extraction and embedding results'}
-                  {uploadQuality === 'fast' &&
-                    'Faster processing with slightly lower quality'}
-                  {uploadQuality === 'custom' &&
-                    'Custom ingestion configuration'}
-                </p>
-              </div>
+                    const newCollection = await client.collections.create({
+                      name: name,
+                    });
 
-              {/* Metadata */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <label className="text-sm font-medium">Metadata</label>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <HelpCircle
-                            className="h-3.5 w-3.5 text-muted-foreground cursor-help"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-xs">
-                          <p className="text-xs">
-                            Add custom metadata to help organize and filter your
-                            documents. Metadata applies to all selected files
-                            and can be used for filtering, searching, and
-                            categorization. For example, you can tag files with
-                            project names, departments, or any other relevant
-                            information.
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                    <p className="text-xs text-muted-foreground ml-2">
-                      Add key-value pairs to organize and filter documents.
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 px-3 border-2 border-primary text-primary bg-transparent hover:bg-primary/10 font-semibold"
-                    onClick={() => {
-                      const newFieldId = crypto.randomUUID();
-                      setMetadataFields((prev) => [
-                        ...prev,
-                        {
-                          id: newFieldId,
-                          key: '',
-                          value: '',
-                          placeholder: '',
-                          showPresets: false,
-                        },
-                      ]);
-                    }}
-                  >
-                    <Plus className="h-4 w-4 mr-1.5" />
-                    Add metadata
-                  </Button>
-                </div>
+                    const collectionId = newCollection.results.id;
+                    const collectionName =
+                      newCollection.results.name || collectionId;
 
-                {/* Existing metadata entries */}
-                {Object.entries(uploadMetadata).length > 0 && (
-                  <div className="space-y-2">
-                    {Object.entries(uploadMetadata).map(([key, value]) => (
-                      <div
-                        key={key}
-                        className="flex items-center gap-2 p-2 border rounded-md bg-muted/30"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-medium text-muted-foreground mb-0.5">
-                            {key}
-                          </div>
-                          <div className="text-sm truncate">{value}</div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 flex-shrink-0"
-                          onClick={() => {
-                            const newMetadata = { ...uploadMetadata };
-                            delete newMetadata[key];
-                            setUploadMetadata(newMetadata);
-                          }}
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                    // Refresh collections list
+                    onCollectionChange();
 
-                {/* Editable metadata fields */}
-                {metadataFields.length > 0 && (
-                  <div className="space-y-2">
-                    {metadataFields.map((field) => (
-                      <div
-                        key={field.id}
-                        className="p-2 border rounded-md bg-muted/20"
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className="relative flex-1">
-                            <Popover
-                              open={field.showPresets}
-                              onOpenChange={(open) => {
-                                setMetadataFields((prev) =>
-                                  prev.map((f) =>
-                                    f.id === field.id
-                                      ? { ...f, showPresets: open }
-                                      : f
-                                  )
-                                );
-                              }}
-                            >
-                              <PopoverAnchor asChild>
-                                <div className="w-full" data-popover-anchor>
-                                  <Input
-                                    placeholder="Key (e.g., project, department)"
-                                    value={field.key}
-                                    onChange={(e) => {
-                                      setMetadataFields((prev) =>
-                                        prev.map((f) =>
-                                          f.id === field.id
-                                            ? {
-                                                ...f,
-                                                key: e.target.value,
-                                                showPresets: false,
-                                              }
-                                            : f
-                                        )
-                                      );
-                                    }}
-                                    onFocus={() => {
-                                      setMetadataFields((prev) =>
-                                        prev.map((f) =>
-                                          f.id === field.id
-                                            ? { ...f, showPresets: true }
-                                            : f
-                                        )
-                                      );
-                                    }}
-                                    className={`flex-1 w-full ${field.showPresets ? 'border-primary' : ''}`}
-                                  />
-                                </div>
-                              </PopoverAnchor>
-                              <PopoverContent
-                                className="p-0"
-                                align="start"
-                                side="bottom"
-                                sideOffset={4}
-                                style={{
-                                  width:
-                                    'var(--radix-popover-anchor-width, 100%)',
-                                  minWidth: 'var(--radix-popover-anchor-width)',
-                                }}
-                              >
-                                <Command>
-                                  <CommandList>
-                                    <CommandGroup heading="Quick presets">
-                                      {[
-                                        {
-                                          key: 'project',
-                                          label: 'Project',
-                                          example: 'My Project',
-                                        },
-                                        {
-                                          key: 'department',
-                                          label: 'Department',
-                                          example: 'Engineering',
-                                        },
-                                        {
-                                          key: 'category',
-                                          label: 'Category',
-                                          example: 'Documentation',
-                                        },
-                                        {
-                                          key: 'version',
-                                          label: 'Version',
-                                          example: '1.0.0',
-                                        },
-                                        {
-                                          key: 'author',
-                                          label: 'Author',
-                                          example: 'John Doe',
-                                        },
-                                        {
-                                          key: 'tags',
-                                          label: 'Tags',
-                                          example: 'important, draft',
-                                        },
-                                        {
-                                          key: 'source',
-                                          label: 'Source',
-                                          example: 'Internal',
-                                        },
-                                      ].map((preset) => (
-                                        <CommandItem
-                                          key={preset.key}
-                                          value={`${preset.label} ${preset.example}`}
-                                          onSelect={() => {
-                                            setMetadataFields((prev) =>
-                                              prev.map((f) =>
-                                                f.id === field.id
-                                                  ? {
-                                                      ...f,
-                                                      key: preset.key,
-                                                      value: '',
-                                                      placeholder:
-                                                        preset.example,
-                                                      showPresets: false,
-                                                    }
-                                                  : f
-                                              )
-                                            );
-                                          }}
-                                          className="cursor-pointer"
-                                        >
-                                          <span className="font-medium">
-                                            {preset.label}
-                                          </span>
-                                          <span className="text-muted-foreground ml-2">
-                                            ({preset.example})
-                                          </span>
-                                        </CommandItem>
-                                      ))}
-                                    </CommandGroup>
-                                  </CommandList>
-                                </Command>
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                          <Input
-                            placeholder={field.placeholder || 'Value'}
-                            value={field.value}
-                            onChange={(e) => {
-                              setMetadataFields((prev) =>
-                                prev.map((f) =>
-                                  f.id === field.id
-                                    ? {
-                                        ...f,
-                                        value: e.target.value,
-                                        placeholder: '',
-                                      }
-                                    : f
-                                )
-                              );
-                            }}
-                            onFocus={() => {
-                              if (field.placeholder && !field.value) {
-                                setMetadataFields((prev) =>
-                                  prev.map((f) =>
-                                    f.id === field.id
-                                      ? { ...f, placeholder: '' }
-                                      : f
-                                  )
-                                );
-                              }
-                            }}
-                            className="flex-1"
-                            onKeyDown={(e) => {
-                              if (
-                                e.key === 'Enter' &&
-                                field.key.trim() &&
-                                (field.value.trim() || field.placeholder.trim())
-                              ) {
-                                const valueToUse =
-                                  field.value.trim() ||
-                                  field.placeholder.trim();
-                                setUploadMetadata((prev) => ({
-                                  ...prev,
-                                  [field.key.trim()]: valueToUse,
-                                }));
-                                setMetadataFields((prev) =>
-                                  prev.filter((f) => f.id !== field.id)
-                                );
-                              } else if (e.key === 'Escape') {
-                                setMetadataFields((prev) =>
-                                  prev.filter((f) => f.id !== field.id)
-                                );
-                              }
-                            }}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-9 w-9 flex-shrink-0"
-                            onClick={() => {
-                              setMetadataFields((prev) =>
-                                prev.filter((f) => f.id !== field.id)
-                              );
-                            }}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                    toast({
+                      title: 'Success',
+                      description: `Collection "${collectionName}" created successfully.`,
+                    });
 
-              {/* Upload Progress - Detailed per-file status */}
-              {isUploading && uploadFiles.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">Upload Progress</span>
-                    <span className="text-muted-foreground">
-                      {Math.round(uploadProgress)}%
-                    </span>
-                  </div>
-                  <Progress value={uploadProgress} className="h-2" />
-
-                  {/* Per-file status */}
-                  <ScrollArea className="h-40 rounded-md border p-3">
-                    <div className="space-y-2">
-                      {uploadFiles.map((file, index) => {
-                        const status = fileUploadStatus[file.name];
-                        if (!status) return null;
-
-                        return (
-                          <div key={index} className="space-y-1">
-                            <div className="flex items-center justify-between text-xs">
-                              <div className="flex items-center gap-2 flex-1 min-w-0">
-                                {status.status === 'success' && (
-                                  <div className="h-2 w-2 rounded-full bg-green-500 flex-shrink-0" />
-                                )}
-                                {status.status === 'error' && (
-                                  <div className="h-2 w-2 rounded-full bg-red-500 flex-shrink-0" />
-                                )}
-                                {(status.status === 'uploading' ||
-                                  status.status === 'pending') && (
-                                  <Loader2 className="h-3 w-3 animate-spin text-primary flex-shrink-0" />
-                                )}
-                                <span className="truncate font-medium">
-                                  {file.name}
-                                </span>
-                              </div>
-                              <span className="text-muted-foreground flex-shrink-0 ml-2">
-                                {status.status === 'success'
-                                  ? 'Done'
-                                  : status.status === 'error'
-                                    ? 'Failed'
-                                    : status.status === 'uploading'
-                                      ? `${Math.round(status.progress)}%`
-                                      : 'Pending'}
-                              </span>
-                            </div>
-                            {(status.status === 'uploading' ||
-                              status.status === 'pending') && (
-                              <Progress
-                                value={status.progress}
-                                className="h-1"
-                              />
-                            )}
-                            {status.status === 'error' && status.error && (
-                              <p className="text-xs text-red-500 truncate">
-                                {status.error}
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </ScrollArea>
-                </div>
-              )}
+                    return { id: collectionId, name: collectionName };
+                  } catch (error: any) {
+                    console.error('Error creating collection:', error);
+                    toast({
+                      title: 'Error',
+                      description:
+                        error?.message || 'Failed to create collection.',
+                      variant: 'destructive',
+                    });
+                    return null;
+                  }
+                }}
+                disabled={isUploading}
+              />
 
               <DialogFooter>
                 <Button
@@ -1795,278 +1011,51 @@ function FileManager({
                 onSwitchToFileTab={() => setUploadActiveTab('file')}
                 isUploading={isUploading}
                 renderCollectionsSelect={
-                  /* Collection Selection - Same as File Upload */
-                  <>
-                    <label className="text-sm font-medium">Collections</label>
-                    <MultiSelect
-                      id="upload-collections-url"
-                      options={[
-                        ...collections.map((collection) => ({
-                          value: collection.id,
-                          label: collection.name || collection.id,
-                        })),
-                      ]}
-                      value={uploadCollectionIds}
-                      onChange={setUploadCollectionIds}
-                      onCreateNew={async (name: string) => {
-                        try {
-                          const client = await getClient();
-                          if (!client) {
-                            throw new Error(
-                              'Failed to get authenticated client'
-                            );
-                          }
-
-                          const newCollection = await client.collections.create(
-                            {
-                              name: name,
-                            }
-                          );
-
-                          const collectionId = newCollection.results.id;
-                          const collectionName =
-                            newCollection.results.name || collectionId;
-
-                          // Refresh collections list
-                          onCollectionChange();
-
-                          toast({
-                            title: 'Success',
-                            description: `Collection "${collectionName}" created successfully.`,
-                          });
-
-                          return { id: collectionId, name: collectionName };
-                        } catch (error: any) {
-                          console.error('Error creating collection:', error);
-                          toast({
-                            title: 'Error',
-                            description:
-                              error?.message || 'Failed to create collection.',
-                            variant: 'destructive',
-                          });
-                          return null;
+                  <UploadConfigForm
+                    collections={collections}
+                    selectedCollectionIds={uploadCollectionIds}
+                    uploadQuality={uploadQuality}
+                    metadata={uploadMetadata}
+                    onCollectionsChange={setUploadCollectionIds}
+                    onQualityChange={setUploadQuality}
+                    onMetadataChange={setUploadMetadata}
+                    onCreateCollection={async (name: string) => {
+                      try {
+                        const client = await getClient();
+                        if (!client) {
+                          throw new Error('Failed to get authenticated client');
                         }
-                      }}
-                    />
-                    {uploadCollectionIds.length === 0 && (
-                      <p className="text-xs text-muted-foreground">
-                        If no collection is selected, documents will be added to
-                        "All Documents"
-                      </p>
-                    )}
-                  </>
-                }
-                renderQualitySelect={
-                  /* Quality Selection - Same as File Upload */
-                  <>
-                    <label className="text-sm font-medium">
-                      Upload Quality
-                    </label>
-                    <Select
-                      value={uploadQuality}
-                      onValueChange={setUploadQuality}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="hi-res">
-                          <div className="flex items-center gap-2">
-                            <Sparkles className="h-4 w-4 text-yellow-500" />
-                            <span>Maximum Quality (hi-res)</span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="fast">
-                          <div className="flex items-center gap-2">
-                            <Upload className="h-4 w-4 text-blue-500" />
-                            <span>Fast (fast)</span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="custom">
-                          <div className="flex items-center gap-2">
-                            <Edit className="h-4 w-4 text-purple-500" />
-                            <span>Custom (custom)</span>
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      {uploadQuality === 'hi-res' &&
-                        'Maximum quality ensures best extraction and embedding results'}
-                      {uploadQuality === 'fast' &&
-                        'Faster processing with slightly lower quality'}
-                      {uploadQuality === 'custom' &&
-                        'Custom ingestion configuration'}
-                    </p>
-                  </>
-                }
-                renderMetadataFields={
-                  /* Metadata Fields - Simplified version for URL Upload */
-                  <>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <label className="text-sm font-medium">Metadata</label>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <HelpCircle
-                                className="h-3.5 w-3.5 text-muted-foreground cursor-help"
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-xs">
-                              <p className="text-xs">
-                                Add custom metadata to help organize and filter
-                                your documents. Metadata applies to all fetched
-                                files and can be used for filtering, searching,
-                                and categorization.
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        <p className="text-xs text-muted-foreground ml-2">
-                          Add key-value pairs to organize and filter documents.
-                        </p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-9 px-3 border-2 border-primary text-primary bg-transparent hover:bg-primary/10 font-semibold"
-                        onClick={() => {
-                          const newFieldId = crypto.randomUUID();
-                          setMetadataFields((prev) => [
-                            ...prev,
-                            {
-                              id: newFieldId,
-                              key: '',
-                              value: '',
-                              placeholder: '',
-                              showPresets: false,
-                            },
-                          ]);
-                        }}
-                      >
-                        <Plus className="h-4 w-4 mr-1.5" />
-                        Add metadata
-                      </Button>
-                    </div>
 
-                    {/* Existing metadata entries */}
-                    {Object.entries(uploadMetadata).length > 0 && (
-                      <div className="space-y-2">
-                        {Object.entries(uploadMetadata).map(([key, value]) => (
-                          <div
-                            key={key}
-                            className="flex items-center gap-2 p-2 border rounded-md bg-muted/30"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <div className="text-xs font-medium text-muted-foreground mb-0.5">
-                                {key}
-                              </div>
-                              <div className="text-sm truncate">{value}</div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 flex-shrink-0"
-                              onClick={() => {
-                                const newMetadata = { ...uploadMetadata };
-                                delete newMetadata[key];
-                                setUploadMetadata(newMetadata);
-                              }}
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                        const newCollection = await client.collections.create({
+                          name: name,
+                        });
 
-                    {/* Editable metadata fields - simplified for URL */}
-                    {metadataFields.length > 0 && (
-                      <div className="space-y-2">
-                        {metadataFields.map((field) => (
-                          <div
-                            key={field.id}
-                            className="p-2 border rounded-md bg-muted/20"
-                          >
-                            <div className="flex items-center gap-2">
-                              <Input
-                                placeholder="Key"
-                                value={field.key}
-                                onChange={(e) => {
-                                  setMetadataFields((prev) =>
-                                    prev.map((f) =>
-                                      f.id === field.id
-                                        ? { ...f, key: e.target.value }
-                                        : f
-                                    )
-                                  );
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    const key = field.key.trim();
-                                    const value = field.value.trim();
-                                    if (key && value) {
-                                      setUploadMetadata((prev) => ({
-                                        ...prev,
-                                        [key]: value,
-                                      }));
-                                      setMetadataFields((prev) =>
-                                        prev.filter((f) => f.id !== field.id)
-                                      );
-                                    }
-                                  }
-                                }}
-                                className="flex-1"
-                              />
-                              <Input
-                                placeholder="Value"
-                                value={field.value}
-                                onChange={(e) => {
-                                  setMetadataFields((prev) =>
-                                    prev.map((f) =>
-                                      f.id === field.id
-                                        ? { ...f, value: e.target.value }
-                                        : f
-                                    )
-                                  );
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    const key = field.key.trim();
-                                    const value = field.value.trim();
-                                    if (key && value) {
-                                      setUploadMetadata((prev) => ({
-                                        ...prev,
-                                        [key]: value,
-                                      }));
-                                      setMetadataFields((prev) =>
-                                        prev.filter((f) => f.id !== field.id)
-                                      );
-                                    }
-                                  }
-                                }}
-                                className="flex-1"
-                              />
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 flex-shrink-0"
-                                onClick={() => {
-                                  setMetadataFields((prev) =>
-                                    prev.filter((f) => f.id !== field.id)
-                                  );
-                                }}
-                              >
-                                <X className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
+                        const collectionId = newCollection.results.id;
+                        const collectionName =
+                          newCollection.results.name || collectionId;
+
+                        // Refresh collections list
+                        onCollectionChange();
+
+                        toast({
+                          title: 'Success',
+                          description: `Collection "${collectionName}" created successfully.`,
+                        });
+
+                        return { id: collectionId, name: collectionName };
+                      } catch (error: any) {
+                        console.error('Error creating collection:', error);
+                        toast({
+                          title: 'Error',
+                          description:
+                            error?.message || 'Failed to create collection.',
+                          variant: 'destructive',
+                        });
+                        return null;
+                      }
+                    }}
+                    disabled={isUploading}
+                  />
                 }
               />
             </TabsContent>
