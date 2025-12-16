@@ -3,10 +3,19 @@ import { useState, useCallback } from 'react';
 
 import { useToast } from '@/components/ui/use-toast';
 import { useUserContext } from '@/context/UserContext';
-import { IngestionStatus } from '@/types';
+import { IngestionStatus, KGExtractionStatus } from '@/types';
 
 interface UseBulkActionsOptions {
   onSuccess?: () => void;
+}
+
+/** Статистика для extract операции */
+export interface ExtractStats {
+  selectedCount: number;
+  eligibleCount: number;
+  alreadyExtractedCount: number;
+  failedExtractionCount: number;
+  notIngestedCount: number;
 }
 
 export function useBulkActions(
@@ -60,6 +69,38 @@ export function useBulkActions(
       setIsProcessing(false);
     }
   }, [selectedIds, getClient, toast, onSuccess]);
+
+  /**
+   * Вычисляет статистику для extract операции
+   * Используется для отображения в ExtractConfirmDialog
+   */
+  const getExtractStats = useCallback((): ExtractStats => {
+    const selectedFiles = files.filter((f) => selectedIds.includes(f.id));
+
+    const eligibleFiles = selectedFiles.filter(
+      (f) => f.ingestionStatus === IngestionStatus.SUCCESS
+    );
+
+    const alreadyExtracted = eligibleFiles.filter(
+      (f) => f.extractionStatus === KGExtractionStatus.SUCCESS
+    );
+
+    const failedExtraction = eligibleFiles.filter(
+      (f) => f.extractionStatus === KGExtractionStatus.FAILED
+    );
+
+    const notIngested = selectedFiles.filter(
+      (f) => f.ingestionStatus !== IngestionStatus.SUCCESS
+    );
+
+    return {
+      selectedCount: selectedFiles.length,
+      eligibleCount: eligibleFiles.length,
+      alreadyExtractedCount: alreadyExtracted.length,
+      failedExtractionCount: failedExtraction.length,
+      notIngestedCount: notIngested.length,
+    };
+  }, [selectedIds, files]);
 
   const bulkExtract = useCallback(async () => {
     if (selectedIds.length === 0) return;
@@ -248,5 +289,6 @@ export function useBulkActions(
     bulkCopy,
     bulkDownload,
     getSelectedFiles,
+    getExtractStats,
   };
 }

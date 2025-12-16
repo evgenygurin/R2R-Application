@@ -4,6 +4,7 @@ import { CollectionResponse, DocumentResponse } from 'r2r-js';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { BulkActionsBar } from '@/components/explorer/BulkActionsBar';
+import { ExtractConfirmDialog } from '@/components/explorer/ExtractConfirmDialog';
 import { FileGridView } from '@/components/explorer/FileGridView';
 import { FileManagerDialogs } from '@/components/explorer/FileManagerDialogs';
 import { FileManagerToolbar } from '@/components/explorer/FileManagerToolbar';
@@ -96,6 +97,7 @@ export function FileManager({
   const [copyModalOpen, setCopyModalOpen] = useState(false);
   const [createCollectionModalOpen, setCreateCollectionModalOpen] =
     useState(false);
+  const [extractConfirmModalOpen, setExtractConfirmModalOpen] = useState(false);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [activeFile, setActiveFile] = useState<DocumentResponse | null>(null);
   const [selectedCollectionForAction, setSelectedCollectionForAction] =
@@ -189,6 +191,7 @@ export function FileManager({
     bulkMove,
     bulkCopy,
     bulkDownload,
+    getExtractStats,
   } = useBulkActions(files, selectedFiles, {
     onSuccess: () => {
       setSelectedFiles([]);
@@ -363,7 +366,8 @@ export function FileManager({
         bulkDownload();
         break;
       case 'extract':
-        bulkExtract();
+        // Показываем confirmation dialog перед extract
+        setExtractConfirmModalOpen(true);
         break;
       default:
         break;
@@ -754,6 +758,15 @@ export function FileManager({
           setPreviewModalOpen(false);
           setActiveFile(null);
         }}
+      />
+
+      <ExtractConfirmDialog
+        open={extractConfirmModalOpen}
+        onClose={() => setExtractConfirmModalOpen(false)}
+        onConfirm={() => {
+          bulkExtract();
+        }}
+        {...getExtractStats()}
       />
     </Card>
   );

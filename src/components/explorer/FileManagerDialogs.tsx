@@ -10,7 +10,7 @@ import { DocumentDetailsDialog } from '@/components/explorer/DocumentDetailsDial
 import { RenameDocumentDialog } from '@/components/explorer/RenameDocumentDialog';
 import { UploadConfigForm } from '@/components/explorer/UploadConfigForm';
 import { UploadDocumentsDialog } from '@/components/explorer/UploadDocumentsDialog';
-import { FileUploadStatus, UploadQuality } from '@/types/explorer';
+import { UploadQuality } from '@/types/explorer';
 
 /**
  * FileManagerDialogs - Контейнер всех модальных окон File Manager
@@ -29,7 +29,10 @@ interface FileManagerDialogsProps {
   uploadModalOpen: boolean;
   uploadActiveTab: 'file' | 'url';
   uploadFiles: File[];
-  uploadStatus: Record<string, FileUploadStatus>;
+  uploadStatus: Record<
+    string,
+    { status: 'pending' | 'uploading' | 'success' | 'error'; progress: number }
+  >;
   isUploading: boolean;
   uploadProgress: number;
   uploadCollectionIds: string[];

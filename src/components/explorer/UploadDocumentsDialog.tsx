@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileUploadStatus, UploadQuality } from '@/types/explorer';
+import { UploadQuality } from '@/types/explorer';
 
 export interface UploadDocumentsDialogProps {
   /** Whether the dialog is open */
@@ -31,7 +31,10 @@ export interface UploadDocumentsDialogProps {
   /** Files selected for upload */
   uploadFiles: File[];
   /** Upload status for each file */
-  uploadStatus: Record<string, FileUploadStatus>;
+  uploadStatus: Record<
+    string,
+    { status: 'pending' | 'uploading' | 'success' | 'error'; progress: number }
+  >;
   /** Whether upload is in progress */
   isUploading: boolean;
   /** Overall upload progress (0-100) */
