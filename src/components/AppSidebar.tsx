@@ -70,8 +70,8 @@ export function AppSidebar({
         <SidebarHeader className="border-b border-zinc-700 !pt-1">
           <div className="px-6 py-2">
             <h2 className="text-lg font-semibold text-white mb-2">Collections</h2>
-          </div>
-        </SidebarHeader>
+        </div>
+      </SidebarHeader>
       )}
 
       <SidebarContent className="!pt-1">

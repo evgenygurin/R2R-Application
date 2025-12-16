@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 
 import EditPromptDialog from '@/components/ChatDemo/utils/editPromptDialog';
 import Layout from '@/components/Layout';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 import { useUserContext } from '@/context/UserContext';
 
 interface Prompt {

@@ -3,7 +3,7 @@ import { User } from 'r2r-js';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import Table, { Column } from '@/components/ChatDemo/Table';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,

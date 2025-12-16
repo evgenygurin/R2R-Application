@@ -2,7 +2,6 @@ import * as Sentry from '@sentry/nextjs';
 import { Analytics } from '@vercel/analytics/react';
 import type { AppProps } from 'next/app';
 import { useRouter } from 'next/router';
-import { useTheme } from 'next-themes';
 import { useEffect, useCallback } from 'react';
 
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -14,12 +13,10 @@ import { initializePostHog } from '@/lib/posthog-client';
 import '@/styles/globals.css';
 
 function MyAppContent({ Component, pageProps }: AppProps) {
-  const { setTheme } = useTheme();
   const { isAuthenticated, isSuperUser, authState } = useUserContext();
   const router = useRouter();
 
   useEffect(() => {
-    setTheme(brandingConfig.theme);
     initializePostHog();
   }, []);
 
@@ -128,8 +125,8 @@ function MyApp(props: AppProps) {
     <ErrorBoundary>
       <ThemeProvider
         attribute="class"
-        defaultTheme="dark"
-        enableSystem={false}
+        defaultTheme="system"
+        enableSystem={true}
         disableTransitionOnChange
       >
         <UserProvider>

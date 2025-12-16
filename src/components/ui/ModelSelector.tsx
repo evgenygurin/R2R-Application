@@ -17,7 +17,7 @@ import {
 import { useUserContext } from '@/context/UserContext';
 import { ModelSelectorProps } from '@/types';
 
-import { Button } from './Button';
+import { Button } from './button';
 
 const predefinedModels = [
   { value: 'gpt-4o-mini', label: 'gpt-4o-mini' },

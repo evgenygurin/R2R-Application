@@ -18,7 +18,7 @@ import R2RServerCard from '@/components/ChatDemo/ServerCard';
 import Layout from '@/components/Layout';
 import RequestsCard from '@/components/RequestsCard';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 import { CardTitle, CardHeader, CardContent, Card } from '@/components/ui/card';
 import { brandingConfig } from '@/config/brandingConfig';
 import { useUserContext } from '@/context/UserContext';

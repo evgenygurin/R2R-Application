@@ -12,7 +12,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 import { useUserContext } from '@/context/UserContext';
 
 export interface RemoveButtonProps {

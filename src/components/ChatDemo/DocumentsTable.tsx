@@ -8,7 +8,7 @@ import Table, { Column } from '@/components/ChatDemo/Table';
 import { UploadButton } from '@/components/ChatDemo/upload';
 import DocumentInfoDialog from '@/components/ChatDemo/utils/documentDialogInfo';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Popover,

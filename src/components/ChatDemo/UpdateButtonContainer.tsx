@@ -3,7 +3,7 @@ import { FileUp } from 'lucide-react';
 import React, { useState, useRef } from 'react';
 
 import { Spinner } from '@/components/Spinner';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 import { useUserContext } from '@/context/UserContext';
 import { UpdateButtonContainerProps } from '@/types';
 

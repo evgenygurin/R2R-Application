@@ -5,7 +5,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import CollectionCreationModal from '@/components/ChatDemo/utils/collectionCreationModal';
 import { ContainerObjectCard } from '@/components/ContainerObjectCard';
 import Layout from '@/components/Layout';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Pagination from '@/components/ui/pagination';
 import { useUserContext } from '@/context/UserContext';

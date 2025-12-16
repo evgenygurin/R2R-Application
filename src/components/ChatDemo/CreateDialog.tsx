@@ -2,7 +2,7 @@ import { Plus, X } from 'lucide-react';
 import { UnprocessedChunk } from 'r2r-js/dist/types';
 import React, { useState } from 'react';
 
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,

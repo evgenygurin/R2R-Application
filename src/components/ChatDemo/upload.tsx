@@ -2,7 +2,7 @@ import { FileUp, PencilLine, Plus } from 'lucide-react';
 import { UnprocessedChunk } from 'r2r-js/dist/types';
 import React, { useState, Dispatch, SetStateAction } from 'react';
 
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 import {
   Popover,
   PopoverTrigger,

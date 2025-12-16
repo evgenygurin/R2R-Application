@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import React, { useState, useEffect } from 'react';
 
 import Layout from '@/components/Layout';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useUserContext } from '@/context/UserContext';
 

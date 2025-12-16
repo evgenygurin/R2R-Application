@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 
 import { DeleteButton } from '@/components/ChatDemo/deleteButton';
 import Layout from '@/components/Layout';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';

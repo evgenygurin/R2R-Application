@@ -2,7 +2,7 @@ import { ArrowRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import React, { FC, useState, useCallback } from 'react';
 
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 import { SearchProps } from '@/types';
 
 function debounce<T extends (...args: any[]) => void>(

@@ -7,7 +7,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { DeleteButton } from '@/components/ChatDemo/deleteButton';
 import AssignDocumentToCollectionDialog from '@/components/ChatDemo/utils/AssignDocumentToCollectionDialog';
 import AssignUserToCollectionDialog from '@/components/ChatDemo/utils/AssignUserToCollectionDialog';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
