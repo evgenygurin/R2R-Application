@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/router';
 import { CollectionResponse } from 'r2r-js';
 import React, { useCallback, useEffect, useState } from 'react';
 
@@ -8,7 +9,6 @@ import { ExplorerSidebar } from '@/components/explorer/ExplorerSidebar';
 import { Navbar } from '@/components/shared/NavBar';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { useUserContext } from '@/context/UserContext';
-import { useRouter } from 'next/router';
 
 /**
  * ExplorerPage - Главная страница файлового менеджера

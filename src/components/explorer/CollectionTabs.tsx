@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/router';
 import {
   CollectionResponse,
   CommunityResponse,
@@ -21,7 +22,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useUserContext } from '@/context/UserContext';
 import { useBatchFetch } from '@/hooks/useBatchFetch';
-import { useRouter } from 'next/router';
 
 interface CollectionTabsProps {
   selectedCollectionId: string | null;
