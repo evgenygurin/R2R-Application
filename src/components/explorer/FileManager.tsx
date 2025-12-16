@@ -66,6 +66,10 @@ export function FileManager({
     extractionStatus: [],
   });
 
+  // Cache для корректных extraction статусов (для документов с "processing" но с реальными entities)
+  const [correctedExtractionStatuses, setCorrectedExtractionStatuses] =
+    useState<Record<string, string>>({});
+
   const DEFAULT_INGESTION_STATUSES = [
     'pending',
     'parsing',
@@ -183,6 +187,73 @@ export function FileManager({
     },
   });
 
+  // Batch проверка extraction статусов для "processing" документов
+  // Если у документа есть entities/relationships - корректируем статус на SUCCESS
+  useEffect(() => {
+    const processingDocs = files.filter(
+      (f) =>
+        f.extractionStatus === KGExtractionStatus.PROCESSING ||
+        f.extractionStatus === 'processing'
+    );
+
+    if (processingDocs.length === 0) return;
+
+    const checkExtractionCounts = async () => {
+      try {
+        const client = await getClient();
+        if (!client) return;
+
+        const results = await Promise.all(
+          processingDocs.map(async (doc) => {
+            try {
+              // Проверяем entities и relationships в параллель
+              const [entitiesResult, relationshipsResult] = await Promise.all([
+                client.documents
+                  .listEntities({ id: doc.id, offset: 0, limit: 1 })
+                  .catch(() => ({ totalEntries: 0 })),
+                client.documents
+                  .listRelationships({ id: doc.id, offset: 0, limit: 1 })
+                  .catch(() => ({ totalEntries: 0 })),
+              ]);
+
+              const hasExtractedData =
+                (entitiesResult.totalEntries || 0) > 0 ||
+                (relationshipsResult.totalEntries || 0) > 0;
+
+              return {
+                id: doc.id,
+                correctedStatus: hasExtractedData
+                  ? KGExtractionStatus.SUCCESS
+                  : null,
+              };
+            } catch {
+              return { id: doc.id, correctedStatus: null };
+            }
+          })
+        );
+
+        // Обновляем cache только для документов с реальными данными
+        const newCorrections: Record<string, string> = {};
+        results.forEach((r) => {
+          if (r.correctedStatus) {
+            newCorrections[r.id] = r.correctedStatus;
+          }
+        });
+
+        if (Object.keys(newCorrections).length > 0) {
+          setCorrectedExtractionStatuses((prev) => ({
+            ...prev,
+            ...newCorrections,
+          }));
+        }
+      } catch (error) {
+        console.error('Error checking extraction counts:', error);
+      }
+    };
+
+    checkExtractionCounts();
+  }, [files, getClient]);
+
   // Bulk actions hook
   const {
     isProcessing,
@@ -225,8 +296,19 @@ export function FileManager({
     collections,
   });
 
+  // Применяем корректированные extraction статусы к files
+  const filesWithCorrectedStatuses = useMemo(() => {
+    return files.map((file) => {
+      const correctedStatus = correctedExtractionStatuses[file.id];
+      if (correctedStatus) {
+        return { ...file, extractionStatus: correctedStatus };
+      }
+      return file;
+    });
+  }, [files, correctedExtractionStatuses]);
+
   const filteredFiles = useMemo(() => {
-    let filtered = [...files];
+    let filtered = [...filesWithCorrectedStatuses];
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
