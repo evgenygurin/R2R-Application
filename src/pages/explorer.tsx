@@ -146,6 +146,7 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { useUserContext } from '@/context/UserContext';
 import useDebounce from '@/hooks/use-debounce';
+import { useDocumentPolling } from '@/hooks/useDocumentPolling';
 import { IngestionStatus, KGExtractionStatus } from '@/types';
 
 // Format file size helper
@@ -455,6 +456,35 @@ function FileManager({
     if (!authState.isAuthenticated) return;
     fetchFiles();
   }, [authState.isAuthenticated, fetchFiles]);
+
+  // Auto-refresh document statuses via polling
+  const pendingDocumentIds = useMemo(() => {
+    return files
+      .filter((file) => {
+        const ingestionPending =
+          file.ingestionStatus !== IngestionStatus.SUCCESS &&
+          file.ingestionStatus !== IngestionStatus.FAILED;
+        const extractionPending =
+          file.extractionStatus !== KGExtractionStatus.SUCCESS &&
+          file.extractionStatus !== KGExtractionStatus.FAILED;
+        return ingestionPending || extractionPending;
+      })
+      .map((file) => file.id);
+  }, [files]);
+
+  const { isPolling } = useDocumentPolling(pendingDocumentIds, {
+    interval: 5000, // Poll every 5 seconds
+    onlyPending: true,
+    onUpdate: (updatedDocs) => {
+      // Update files state with new data
+      setFiles((prevFiles) => {
+        return prevFiles.map((file) => {
+          const updated = updatedDocs.find((doc) => doc.id === file.id);
+          return updated || file;
+        });
+      });
+    },
+  });
 
   // Enhanced search with all entity types
   useEffect(() => {
@@ -931,6 +961,9 @@ function FileManager({
       case 'download':
         handleBulkDownload();
         break;
+      case 'extract':
+        handleBulkExtract();
+        break;
       default:
         break;
     }
@@ -1168,6 +1201,73 @@ function FileManager({
       toast({
         title: 'Download Failed',
         description: error?.message || 'Failed to download files.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleBulkExtract = async () => {
+    if (selectedFiles.length === 0) return;
+
+    try {
+      const client = await getClient();
+      if (!client) {
+        throw new Error('Failed to get authenticated client');
+      }
+
+      // Filter only successfully ingested documents
+      const eligibleFiles = selectedFiles.filter((fileId) => {
+        const file = files.find((f) => f.id === fileId);
+        return file && file.ingestionStatus === IngestionStatus.SUCCESS;
+      });
+
+      if (eligibleFiles.length === 0) {
+        toast({
+          title: 'No Eligible Documents',
+          description:
+            'Only successfully ingested documents can be extracted. Please select documents with "success" ingestion status.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Extract documents sequentially
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const fileId of eligibleFiles) {
+        try {
+          await client.documents.extract({ id: fileId });
+          successCount++;
+          // Small delay between requests
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        } catch (error) {
+          console.error(`Error extracting document ${fileId}:`, error);
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        toast({
+          title: 'Extraction Started',
+          description: `${successCount} document${successCount !== 1 ? 's' : ''} queued for extraction. ${failCount > 0 ? `${failCount} failed.` : 'Processing in background.'}`,
+          variant: failCount > 0 ? 'default' : 'success',
+        });
+      } else {
+        toast({
+          title: 'Extraction Failed',
+          description: 'Failed to start extraction for selected documents.',
+          variant: 'destructive',
+        });
+      }
+
+      // Deselect files after extraction
+      setSelectedFiles([]);
+    } catch (error: any) {
+      console.error('Error initiating bulk extraction:', error);
+      toast({
+        title: 'Extraction Failed',
+        description: error?.message || 'An unknown error occurred',
         variant: 'destructive',
       });
     }
@@ -2365,36 +2465,76 @@ function FileManager({
           <div className="flex items-center gap-2 text-sm min-w-0 flex-1 overflow-hidden">
             <SidebarTrigger className="shrink-0 h-7 w-7" />
             <Separator orientation="vertical" className="h-4 shrink-0" />
-            <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
-              {breadcrumbPath.map((path, index) => (
-                <div key={index} className="flex items-center gap-2 min-w-0">
-                  {index > 0 && (
-                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  )}
-                  <button
-                    onClick={() => navigateToBreadcrumb(index)}
-                    className={`flex items-center gap-2 min-w-0 rounded-md px-2 py-1.5 text-sm transition-colors group text-foreground hover:bg-accent hover:text-accent-foreground ${
-                      index === 0 ? 'ml-1' : ''
-                    }`}
-                    title={index === 0 ? 'All Documents' : path}
-                  >
-                    {index === 0 ? (
-                      <FileText className="h-4 w-4 shrink-0" />
-                    ) : (
-                      <>
-                        <Folder className="h-4 w-4 shrink-0" />
-                        <span className="truncate whitespace-nowrap block min-w-0">
-                          {path}
-                        </span>
-                      </>
+            <Breadcrumb className="flex-1">
+              <BreadcrumbList>
+                {breadcrumbPath.map((path, index) => (
+                  <React.Fragment key={index}>
+                    <BreadcrumbItem>
+                      {index === breadcrumbPath.length - 1 ? (
+                        <BreadcrumbPage className="flex items-center gap-2">
+                          {index === 0 ? (
+                            <FileText className="h-4 w-4 shrink-0" />
+                          ) : (
+                            <>
+                              <Folder className="h-4 w-4 shrink-0" />
+                              <span className="truncate max-w-[200px]">
+                                {path}
+                              </span>
+                            </>
+                          )}
+                        </BreadcrumbPage>
+                      ) : (
+                        <BreadcrumbLink
+                          onClick={() => navigateToBreadcrumb(index)}
+                          className="flex items-center gap-2 cursor-pointer"
+                        >
+                          {index === 0 ? (
+                            <FileText className="h-4 w-4 shrink-0" />
+                          ) : (
+                            <>
+                              <Folder className="h-4 w-4 shrink-0" />
+                              <span className="truncate max-w-[200px]">
+                                {path}
+                              </span>
+                            </>
+                          )}
+                        </BreadcrumbLink>
+                      )}
+                    </BreadcrumbItem>
+                    {index < breadcrumbPath.length - 1 && (
+                      <BreadcrumbSeparator>
+                        <ChevronRight className="h-4 w-4" />
+                      </BreadcrumbSeparator>
                     )}
-                  </button>
-                </div>
-              ))}
-            </div>
+                  </React.Fragment>
+                ))}
+              </BreadcrumbList>
+            </Breadcrumb>
           </div>
 
           <div className="flex items-center gap-2 ml-auto mr-4">
+            {/* Sync indicator */}
+            {isPolling && pendingDocumentIds.length > 0 && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-500/10 border border-blue-500/20">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
+                      <span className="text-xs text-blue-500 font-medium">
+                        Syncing {pendingDocumentIds.length}
+                      </span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">
+                      Auto-updating {pendingDocumentIds.length} document
+                      {pendingDocumentIds.length !== 1 ? 's' : ''} with pending
+                      status
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             <div className="relative w-64">
               <Input
                 type="text"
@@ -2646,6 +2786,14 @@ function FileManager({
             >
               <Download className="h-4 w-4 mr-2" />
               Download
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleBulkAction('extract')}
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              Extract
             </Button>
             <Button
               variant="outline"
