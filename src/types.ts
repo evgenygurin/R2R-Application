@@ -244,6 +244,12 @@ export interface LogoProps {
   priority?: boolean;
 }
 
+export interface AgentActivity {
+  type: 'thinking' | 'tool_call' | 'tool_result';
+  content: string;
+  timestamp: number;
+}
+
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
@@ -255,6 +261,7 @@ export interface Message {
   };
   isStreaming?: boolean;
   searchPerformed?: boolean;
+  activities?: AgentActivity[];
 }
 
 export interface ModelSelectorProps {
