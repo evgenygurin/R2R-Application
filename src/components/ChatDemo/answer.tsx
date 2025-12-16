@@ -217,7 +217,7 @@ export const Answer: FC<{
                 />
               ),
               p: ({ children }) => (
-                <p style={{ color: 'white', display: 'inline' }}>
+                <p className="mb-4 leading-7 text-white">
                   {children}
                   {isStreaming && index === paragraphs.length - 1 && (
                     <AnimatedEllipsis />
@@ -235,24 +235,22 @@ export const Answer: FC<{
                 const language = match ? match[1] : undefined;
                 const codeString = String(children).replace(/\n$/, '');
 
-                // Показывать CodeBlock только для многострочного кода или с явным языком
-                const isMultiline = codeString.includes('\n');
-                const shouldUseCodeBlock =
-                  !inline && isMultiline && codeString.length > 50;
-
-                if (shouldUseCodeBlock) {
+                // Код в тройных обратных кавычках (даже однострочный) -> CodeBlock
+                // Inline код в одинарных кавычках -> inline элемент
+                if (!inline && className) {
                   return (
                     <CodeBlock
                       code={codeString}
                       language={language}
-                      className="my-4"
+                      className="my-6"
                     />
                   );
                 }
 
+                // Inline код
                 return (
                   <code
-                    className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-200 font-mono text-sm"
+                    className="px-1.5 py-0.5 mx-0.5 rounded bg-zinc-800 text-zinc-200 font-mono text-sm"
                     {...props}
                   >
                     {children}
