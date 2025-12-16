@@ -47,27 +47,24 @@ import React, {
   useState,
   useRef,
 } from 'react';
-import { useDropzone } from 'react-dropzone';
 
 import {
   BulkActionsBar,
   BulkAction,
 } from '@/components/explorer/BulkActionsBar';
 import { CollectionActionDialog } from '@/components/explorer/CollectionActionDialog';
+import { CreateCollectionDialog } from '@/components/explorer/CreateCollectionDialog';
 import { DeleteConfirmDialog } from '@/components/explorer/DeleteConfirmDialog';
 import { DocumentDetailsDialog } from '@/components/explorer/DocumentDetailsDialog';
 import { EmptyState } from '@/components/explorer/EmptyState';
 import { ExplorerBreadcrumb } from '@/components/explorer/ExplorerBreadcrumb';
 import { ExplorerSidebar } from '@/components/explorer/ExplorerSidebar';
-import { FileDropzone } from '@/components/explorer/FileDropzone';
 import { FileGridView } from '@/components/explorer/FileGridView';
 import { FileTableView, SortConfig } from '@/components/explorer/FileTableView';
-import { FileUploadList } from '@/components/explorer/FileUploadList';
-import { MetadataEditor } from '@/components/explorer/MetadataEditor';
+import { RenameDocumentDialog } from '@/components/explorer/RenameDocumentDialog';
 import { SearchBar } from '@/components/explorer/SearchBar';
-import { StatusFilter } from '@/components/explorer/StatusFilter';
 import { UploadConfigForm } from '@/components/explorer/UploadConfigForm';
-import { UrlUploadTab } from '@/components/explorer/UrlUploadTab';
+import { UploadDocumentsDialog } from '@/components/explorer/UploadDocumentsDialog';
 import { Navbar } from '@/components/shared/NavBar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -80,21 +77,12 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
 import { MultiSelect } from '@/components/ui/multi-select';
 import {
   Popover,
@@ -218,15 +206,6 @@ function FileManager({
   const [uploadMetadata, setUploadMetadata] = useState<Record<string, string>>(
     {}
   );
-  const [metadataFields, setMetadataFields] = useState<
-    Array<{
-      id: string;
-      key: string;
-      value: string;
-      placeholder: string;
-      showPresets: boolean;
-    }>
-  >([]);
 
   // Update upload collections when selectedCollectionId changes
   useEffect(() => {
@@ -607,33 +586,6 @@ function FileManager({
     });
   };
 
-  // Dropzone configuration
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop: (acceptedFiles) => {
-      const filtered = acceptedFiles.filter((newFile) => {
-        return !uploadFiles.some(
-          (existing) =>
-            existing.name === newFile.name && existing.size === newFile.size
-        );
-      });
-      addFiles(filtered);
-    },
-    multiple: true,
-  });
-
-  const renameFile = () => {
-    if (!activeFile || newFileName.trim() === '') return;
-    // TODO: Implement rename via API
-    setFiles((prev) =>
-      prev.map((file) =>
-        file.id === activeFile.id ? { ...file, title: newFileName } : file
-      )
-    );
-    setRenameModalOpen(false);
-    setActiveFile(null);
-    setNewFileName('');
-  };
-
   const deleteFiles = async () => {
     try {
       const client = await getClient();
@@ -838,266 +790,108 @@ function FileManager({
       </CardContent>
 
       {/* Upload Modal */}
-      <Dialog
+      <UploadDocumentsDialog
         open={uploadModalOpen}
-        onOpenChange={(open) => {
-          setUploadModalOpen(open);
-          if (open) {
-            // When opening dialog, set default collection if one is selected
-            if (selectedCollectionId) {
-              setUploadCollectionIds([selectedCollectionId]);
-            } else {
-              setUploadCollectionIds([]);
-            }
-            // Reset to file upload tab
-            setUploadActiveTab('file');
+        onClose={() => {
+          setUploadModalOpen(false);
+          clearUploadFiles();
+          setUploadMetadata({});
+          setUploadQuality('hi-res');
+          setUploadActiveTab('file');
+          // Reset collections - will be set by useEffect if collection is selected
+          if (selectedCollectionId) {
+            setUploadCollectionIds([selectedCollectionId]);
           } else {
-            // When closing dialog, reset everything
-            clearUploadFiles();
-            setUploadMetadata({});
-            setUploadQuality('hi-res'); // Reset to default
-            setMetadataFields([]);
-            setUploadActiveTab('file'); // Reset tab selection
-            // Reset collections - will be set by useEffect if collection is selected
-            if (selectedCollectionId) {
-              setUploadCollectionIds([selectedCollectionId]);
-            } else {
-              setUploadCollectionIds([]);
-            }
+            setUploadCollectionIds([]);
           }
         }}
-      >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Upload Documents</DialogTitle>
-            <DialogDescription>
-              Upload files from your computer or provide a URL to fetch content.
-            </DialogDescription>
-          </DialogHeader>
-
-          <Tabs
-            value={uploadActiveTab}
-            onValueChange={(value) =>
-              setUploadActiveTab(value as 'file' | 'url')
-            }
-            className="w-full"
-          >
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="file" className="flex items-center gap-2">
-                <Upload className="h-4 w-4" />
-                File Upload
-              </TabsTrigger>
-              <TabsTrigger value="url" className="flex items-center gap-2">
-                <Link2 className="h-4 w-4" />
-                URL Upload
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="file" className="space-y-6 py-4">
-              <FileDropzone
-                onDrop={(acceptedFiles) => {
-                  const filtered = acceptedFiles.filter(
-                    (file) => file.size > 0
-                  );
-                  addFiles(filtered);
-                }}
-              />
-
-              <FileUploadList
-                files={uploadFiles}
-                uploadStatus={fileUploadStatus}
-                isUploading={isUploading}
-                overallProgress={uploadProgress}
-                onRemoveFile={removeUploadFile}
-                showDetailedStatus={isUploading}
-              />
-
-              <UploadConfigForm
-                collections={collections}
-                selectedCollectionIds={uploadCollectionIds}
-                uploadQuality={uploadQuality}
-                metadata={uploadMetadata}
-                onCollectionsChange={setUploadCollectionIds}
-                onQualityChange={setUploadQuality}
-                onMetadataChange={setUploadMetadata}
-                onCreateCollection={async (name: string) => {
-                  try {
-                    const client = await getClient();
-                    if (!client) {
-                      throw new Error('Failed to get authenticated client');
-                    }
-
-                    const newCollection = await client.collections.create({
-                      name: name,
-                    });
-
-                    const collectionId = newCollection.results.id;
-                    const collectionName =
-                      newCollection.results.name || collectionId;
-
-                    // Refresh collections list
-                    onCollectionChange();
-
-                    toast({
-                      title: 'Success',
-                      description: `Collection "${collectionName}" created successfully.`,
-                    });
-
-                    return { id: collectionId, name: collectionName };
-                  } catch (error: any) {
-                    console.error('Error creating collection:', error);
-                    toast({
-                      title: 'Error',
-                      description:
-                        error?.message || 'Failed to create collection.',
-                      variant: 'destructive',
-                    });
-                    return null;
-                  }
-                }}
-                disabled={isUploading}
-              />
-
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setUploadModalOpen(false);
-                    clearUploadFiles();
-                    setUploadMetadata({});
-                    setUploadQuality('hi-res'); // Reset to default
-                    setMetadataFields([]);
-                    // Reset collections - will be set by useEffect if collection is selected
-                    if (selectedCollectionId) {
-                      setUploadCollectionIds([selectedCollectionId]);
-                    } else {
-                      setUploadCollectionIds([]);
-                    }
-                  }}
-                  disabled={isUploading}
-                >
-                  {isUploading ? 'Close' : 'Cancel'}
-                </Button>
-                {isUploading ? (
-                  <Button variant="destructive" onClick={cancelUpload}>
-                    <X className="h-4 w-4 mr-2" />
-                    Cancel Upload
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={() =>
-                      performUpload(
-                        uploadCollectionIds,
-                        uploadQuality as UploadQuality,
-                        uploadMetadata
-                      )
-                    }
-                    disabled={uploadFiles.length === 0 || isUploading}
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload{' '}
-                    {uploadFiles.length > 0 &&
-                      `${uploadFiles.length} file${uploadFiles.length !== 1 ? 's' : ''}`}
-                  </Button>
-                )}
-              </DialogFooter>
-            </TabsContent>
-
-            <TabsContent value="url" className="space-y-6 py-4">
-              <UrlUploadTab
-                onUpload={(files) => {
-                  addFiles(files);
-                }}
-                onSwitchToFileTab={() => setUploadActiveTab('file')}
-                isUploading={isUploading}
-                renderCollectionsSelect={
-                  <UploadConfigForm
-                    collections={collections}
-                    selectedCollectionIds={uploadCollectionIds}
-                    uploadQuality={uploadQuality}
-                    metadata={uploadMetadata}
-                    onCollectionsChange={setUploadCollectionIds}
-                    onQualityChange={setUploadQuality}
-                    onMetadataChange={setUploadMetadata}
-                    onCreateCollection={async (name: string) => {
-                      try {
-                        const client = await getClient();
-                        if (!client) {
-                          throw new Error('Failed to get authenticated client');
-                        }
-
-                        const newCollection = await client.collections.create({
-                          name: name,
-                        });
-
-                        const collectionId = newCollection.results.id;
-                        const collectionName =
-                          newCollection.results.name || collectionId;
-
-                        // Refresh collections list
-                        onCollectionChange();
-
-                        toast({
-                          title: 'Success',
-                          description: `Collection "${collectionName}" created successfully.`,
-                        });
-
-                        return { id: collectionId, name: collectionName };
-                      } catch (error: any) {
-                        console.error('Error creating collection:', error);
-                        toast({
-                          title: 'Error',
-                          description:
-                            error?.message || 'Failed to create collection.',
-                          variant: 'destructive',
-                        });
-                        return null;
-                      }
-                    }}
-                    disabled={isUploading}
-                  />
+        activeTab={uploadActiveTab}
+        onTabChange={(tab) => setUploadActiveTab(tab)}
+        uploadFiles={uploadFiles}
+        uploadStatus={fileUploadStatus}
+        isUploading={isUploading}
+        uploadProgress={uploadProgress}
+        onAddFiles={addFiles}
+        onRemoveFile={removeUploadFile}
+        onClearFiles={clearUploadFiles}
+        onUpload={() =>
+          performUpload(
+            uploadCollectionIds,
+            uploadQuality as UploadQuality,
+            uploadMetadata
+          )
+        }
+        onCancelUpload={cancelUpload}
+        renderConfigForm={
+          <UploadConfigForm
+            collections={collections}
+            selectedCollectionIds={uploadCollectionIds}
+            uploadQuality={uploadQuality}
+            metadata={uploadMetadata}
+            onCollectionsChange={setUploadCollectionIds}
+            onQualityChange={setUploadQuality}
+            onMetadataChange={setUploadMetadata}
+            onCreateCollection={async (name: string) => {
+              try {
+                const client = await getClient();
+                if (!client) {
+                  throw new Error('Failed to get authenticated client');
                 }
-              />
-            </TabsContent>
-          </Tabs>
-        </DialogContent>
-      </Dialog>
+
+                const newCollection = await client.collections.create({
+                  name: name,
+                });
+
+                const collectionId = newCollection.results.id;
+                const collectionName =
+                  newCollection.results.name || collectionId;
+
+                // Refresh collections list
+                onCollectionChange();
+
+                toast({
+                  title: 'Success',
+                  description: `Collection "${collectionName}" created successfully.`,
+                });
+
+                return { id: collectionId, name: collectionName };
+              } catch (error: any) {
+                console.error('Error creating collection:', error);
+                toast({
+                  title: 'Error',
+                  description: error?.message || 'Failed to create collection.',
+                  variant: 'destructive',
+                });
+                return null;
+              }
+            }}
+            disabled={isUploading}
+          />
+        }
+      />
 
       {/* Rename Modal */}
-      <Dialog open={renameModalOpen} onOpenChange={setRenameModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rename File</DialogTitle>
-            <DialogDescription>
-              Enter a new name for your file.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2 pb-4">
-            <div className="space-y-2">
-              <Input
-                placeholder="File Name"
-                value={newFileName}
-                onChange={(e) => setNewFileName(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setRenameModalOpen(false);
-                setActiveFile(null);
-                setNewFileName('');
-              }}
-            >
-              Cancel
-            </Button>
-            <Button onClick={renameFile}>Rename</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <RenameDocumentDialog
+        open={renameModalOpen}
+        onClose={() => {
+          setRenameModalOpen(false);
+          setActiveFile(null);
+          setNewFileName('');
+        }}
+        onConfirm={(newName) => {
+          if (!activeFile) return;
+          // TODO: Implement rename via API
+          setFiles((prev) =>
+            prev.map((file) =>
+              file.id === activeFile.id ? { ...file, title: newName } : file
+            )
+          );
+          setRenameModalOpen(false);
+          setActiveFile(null);
+          setNewFileName('');
+        }}
+        currentFileName={newFileName}
+      />
 
       {/* Delete Modal */}
       <DeleteConfirmDialog
@@ -1157,56 +951,15 @@ function FileManager({
       />
 
       {/* Create Collection and Move Modal */}
-      <Dialog
+      <CreateCollectionDialog
         open={createCollectionModalOpen}
-        onOpenChange={setCreateCollectionModalOpen}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              Create Collection and Move {selectedFiles.length} item
-              {selectedFiles.length !== 1 ? 's' : ''}
-            </DialogTitle>
-            <DialogDescription>
-              Create a new collection and move selected documents to it.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Collection Name</label>
-              <Input
-                placeholder="Enter collection name"
-                value={newCollectionName}
-                onChange={(e) => setNewCollectionName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && newCollectionName.trim()) {
-                    handleCreateCollectionAndMove();
-                  }
-                }}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setCreateCollectionModalOpen(false);
-                setNewCollectionName('');
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreateCollectionAndMove}
-              disabled={!newCollectionName.trim()}
-            >
-              Create and Move
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onClose={() => {
+          setCreateCollectionModalOpen(false);
+          setNewCollectionName('');
+        }}
+        onConfirm={handleCreateCollectionAndMove}
+        selectedCount={selectedFiles.length}
+      />
 
       {/* Preview Modal - Detailed Document Info */}
       {activeFile && (
