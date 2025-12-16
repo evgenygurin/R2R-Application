@@ -2,6 +2,8 @@ import { FC } from 'react';
 import React, { useState, useEffect } from 'react';
 import Markdown from 'react-markdown';
 
+import { AgentActivityIndicator } from '@/components/ChatDemo/AgentActivityIndicator';
+import { CodeBlock } from '@/components/ChatDemo/CodeBlock';
 import {
   Popover,
   PopoverContent,
@@ -16,6 +18,9 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Spinner } from '@/components/ui/spinner';
 import { Message } from '@/types';
 import { VectorSearchResult, KGSearchResult } from '@/types';
 
@@ -83,13 +88,16 @@ const SourceInfo: React.FC<{
 }> = ({ isSearching, sourcesCount }) => (
   <div className="flex items-center justify-between w-full">
     <Logo width={50} height={50} disableLink={true} />
-    <span className="text-sm font-normal text-white">
-      {isSearching ? (
-        <span className="searching-animation">Searching over sources...</span>
-      ) : sourcesCount !== null && sourcesCount > 0 ? (
-        `View ${sourcesCount} Sources`
-      ) : null}
-    </span>
+    {isSearching ? (
+      <Badge variant="secondary" className="flex items-center gap-2 px-3 py-1">
+        <Spinner className="h-3 w-3" />
+        <span className="text-sm">Searching over sources...</span>
+      </Badge>
+    ) : sourcesCount !== null && sourcesCount > 0 ? (
+      <Badge variant="outline" className="px-3 py-1">
+        <span className="text-sm">View {sourcesCount} Sources</span>
+      </Badge>
+    ) : null}
   </div>
 );
 
@@ -199,8 +207,39 @@ export const Answer: FC<{
             <blockquote style={{ color: 'white' }} {...props} />
           ),
           em: (props) => <em style={{ color: 'white' }} {...props} />,
-          code: (props) => <code style={{ color: 'white' }} {...props} />,
-          pre: (props) => <pre style={{ color: 'white' }} {...props} />,
+
+          code: ({ node, inline, className, children, ...props }: any) => {
+            const match = /language-(\w+)/.exec(className || '');
+            const language = match ? match[1] : undefined;
+            const codeString = String(children).replace(/\n$/, '');
+
+            if (!inline && codeString) {
+              return (
+                <CodeBlock
+                  code={codeString}
+                  language={language}
+                  className="my-4"
+                />
+              );
+            }
+
+            return (
+              <code
+                className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-200 font-mono text-sm"
+                {...props}
+              >
+                {children}
+              </code>
+            );
+          },
+
+          pre: ({ children }: any) => {
+            // Extract code element if exists
+            if (children?.type === 'code') {
+              return <>{children}</>;
+            }
+            return <pre style={{ color: 'white' }}>{children}</pre>;
+          },
 
           a: ({ href, ...props }) => {
             if (!href) return null;
@@ -324,24 +363,34 @@ export const Answer: FC<{
         </AccordionItem>
       </Accordion>
 
+      {/* Agent Activity Indicator */}
+      {message.activities && message.activities.length > 0 && (
+        <AgentActivityIndicator
+          activities={message.activities}
+          isActive={isStreaming}
+        />
+      )}
+
       <div className="space-y-4 mt-4">
         {message.content || isStreaming ? (
-          <div className="prose prose-sm max-w-full text-zinc-300 overflow-y-auto max-h-[700px] prose-headings:text-white prose-p:text-white prose-strong:text-white prose-code:text-white p-4 rounded-lg">
-            {message.content ? (
-              renderContent()
-            ) : (
-              <div
-                style={{
-                  color: 'white',
-                  display: 'inline-block',
-                  width: '1em',
-                  height: '1em',
-                }}
-              >
-                <AnimatedEllipsis />
-              </div>
-            )}
-          </div>
+          <ScrollArea className="max-h-[700px] rounded-lg">
+            <div className="prose prose-sm max-w-full text-zinc-300 prose-headings:text-white prose-p:text-white prose-strong:text-white prose-code:text-white p-4">
+              {message.content ? (
+                renderContent()
+              ) : (
+                <div
+                  style={{
+                    color: 'white',
+                    display: 'inline-block',
+                    width: '1em',
+                    height: '1em',
+                  }}
+                >
+                  <AnimatedEllipsis />
+                </div>
+              )}
+            </div>
+          </ScrollArea>
         ) : (
           <div className="flex flex-col gap-2">
             <Skeleton className="max-w-lg h-4 bg-zinc-200" />
