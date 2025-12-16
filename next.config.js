@@ -1,6 +1,7 @@
 const config = {
   reactStrictMode: false,
-  output: 'standalone',
+  // Temporarily disable standalone mode for Vercel deployment
+  // output: 'standalone',
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
