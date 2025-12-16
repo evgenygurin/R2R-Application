@@ -1,39 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  ArrowRightToLine,
-  Calendar,
-  ChevronRight,
-  Copy,
-  Download,
-  Edit,
-  Eye,
-  FileText,
-  Filter,
-  Folder,
-  FolderPlus,
-  Grid,
-  List,
-  Loader2,
-  MoreVertical,
-  Move,
-  Plus,
-  Search,
-  Send,
-  Trash2,
-  Upload,
-  User,
-  X,
-  Network,
-  Users,
-  Link2,
-  Sparkles,
-  HelpCircle,
-} from 'lucide-react';
+import { Upload } from 'lucide-react';
 import {
   CollectionResponse,
   DocumentResponse,
@@ -63,8 +31,10 @@ import { FileGridView } from '@/components/explorer/FileGridView';
 import { FileTableView, SortConfig } from '@/components/explorer/FileTableView';
 import { RenameDocumentDialog } from '@/components/explorer/RenameDocumentDialog';
 import { SearchBar } from '@/components/explorer/SearchBar';
+import { SyncIndicator } from '@/components/explorer/SyncIndicator';
 import { UploadConfigForm } from '@/components/explorer/UploadConfigForm';
 import { UploadDocumentsDialog } from '@/components/explorer/UploadDocumentsDialog';
+import { ViewModeToggle } from '@/components/explorer/ViewModeToggle';
 import { Navbar } from '@/components/shared/NavBar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -113,24 +83,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { useToast } from '@/components/ui/use-toast';
 import { useUserContext } from '@/context/UserContext';
 import { useBulkActions } from '@/hooks/useBulkActions';
 import { useDocumentPolling } from '@/hooks/useDocumentPolling';
 import { useFileUpload } from '@/hooks/useFileUpload';
-import { useUnifiedSearch, SearchResultItem } from '@/hooks/useUnifiedSearch';
-import {
-  formatFileSize,
-  formatDateLocal,
-  getFileIcon,
-  getStatusBadge,
-} from '@/lib/explorer-utils';
+import { useUnifiedSearch } from '@/hooks/useUnifiedSearch';
 import { IngestionStatus, KGExtractionStatus } from '@/types';
 import { UploadQuality } from '@/types/explorer';
 
@@ -315,14 +273,12 @@ function FileManager({
   });
 
   // Unified search hook
-  const { searchResults, isSearching, debouncedSearchQuery } = useUnifiedSearch(
-    {
-      searchQuery,
-      isSearchFocused,
-      files,
-      collections,
-    }
-  );
+  const { searchResults, isSearching } = useUnifiedSearch({
+    searchQuery,
+    isSearchFocused,
+    files,
+    collections,
+  });
 
   const filteredFiles = useMemo(() => {
     let filtered = [...files];
@@ -648,28 +604,10 @@ function FileManager({
           </div>
 
           <div className="flex items-center gap-2 ml-auto mr-4">
-            {/* Sync indicator */}
-            {isPolling && pendingDocumentIds.length > 0 && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-500/10 border border-blue-500/20">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
-                      <span className="text-xs text-blue-500 font-medium">
-                        Syncing {pendingDocumentIds.length}
-                      </span>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="text-xs">
-                      Auto-updating {pendingDocumentIds.length} document
-                      {pendingDocumentIds.length !== 1 ? 's' : ''} with pending
-                      status
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
+            <SyncIndicator
+              isPolling={isPolling}
+              count={pendingDocumentIds.length}
+            />
             <SearchBar
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
@@ -698,26 +636,10 @@ function FileManager({
               Upload
             </Button>
 
-            <div className="flex border rounded-md">
-              <Button
-                variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-                size="icon"
-                className="h-8 w-8 rounded-r-none"
-                onClick={() => setViewMode('list')}
-              >
-                <List className="h-4 w-4" />
-                <span className="sr-only">List view</span>
-              </Button>
-              <Button
-                variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
-                size="icon"
-                className="h-8 w-8 rounded-l-none"
-                onClick={() => setViewMode('grid')}
-              >
-                <Grid className="h-4 w-4" />
-                <span className="sr-only">Grid view</span>
-              </Button>
-            </div>
+            <ViewModeToggle
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+            />
           </div>
         </div>
       </div>
