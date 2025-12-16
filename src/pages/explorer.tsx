@@ -134,7 +134,9 @@ import { useUserContext } from '@/context/UserContext';
 import useDebounce from '@/hooks/use-debounce';
 import { useBulkActions } from '@/hooks/useBulkActions';
 import { useDocumentPolling } from '@/hooks/useDocumentPolling';
+import { useFileUpload } from '@/hooks/useFileUpload';
 import { IngestionStatus, KGExtractionStatus } from '@/types';
+import { UploadQuality } from '@/types/explorer';
 
 // Format file size helper
 function formatFileSize(bytes: number | undefined): string {
@@ -227,10 +229,7 @@ function FileManager({
     useState<string | null>(null);
   const [newCollectionName, setNewCollectionName] = useState('');
 
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadingFile, setUploadingFile] = useState('');
   const [newFileName, setNewFileName] = useState('');
-  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadCollectionIds, setUploadCollectionIds] = useState<string[]>([]);
   const [uploadQuality, setUploadQuality] = useState<string>('hi-res'); // Default to maximum quality
   const [uploadMetadata, setUploadMetadata] = useState<Record<string, string>>(
@@ -245,19 +244,6 @@ function FileManager({
       showPresets: boolean;
     }>
   >([]);
-  const [fileUploadStatus, setFileUploadStatus] = useState<
-    Record<
-      string,
-      {
-        progress: number;
-        status: 'pending' | 'uploading' | 'success' | 'error';
-        error?: string;
-      }
-    >
-  >({});
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadAbortController, setUploadAbortController] =
-    useState<AbortController | null>(null);
 
   // Update upload collections when selectedCollectionId changes
   useEffect(() => {
@@ -345,6 +331,24 @@ function FileManager({
     onSuccess: () => {
       setSelectedFiles([]);
       fetchFiles();
+    },
+  });
+
+  // File upload hook
+  const {
+    files: uploadFiles,
+    uploadStatus: fileUploadStatus,
+    isUploading,
+    progress: uploadProgress,
+    addFiles,
+    removeFile: removeUploadFile,
+    clearFiles: clearUploadFiles,
+    upload: performUpload,
+    cancelUpload,
+  } = useFileUpload({
+    onSuccess: () => {
+      fetchFiles();
+      setUploadModalOpen(false);
     },
   });
 
@@ -1226,285 +1230,16 @@ function FileManager({
     }
   };
 
-  // Real file upload handler - OPTIMIZED for non-blocking UI
-  const handleFileUpload = async () => {
-    if (uploadFiles.length === 0 || isUploading) return;
-
-    const abortController = new AbortController();
-    setUploadAbortController(abortController);
-    setIsUploading(true);
-
-    // Collect metadata from fields
-    const finalMetadata: Record<string, string> = { ...uploadMetadata };
-    metadataFields.forEach((field) => {
-      if (field.key.trim()) {
-        const valueToUse = field.value.trim() || field.placeholder.trim();
-        if (valueToUse) {
-          finalMetadata[field.key.trim()] = valueToUse;
-        }
-      }
-    });
-    setUploadMetadata(finalMetadata);
-
-    // Initialize file status
-    const initialStatus: Record<
-      string,
-      {
-        progress: number;
-        status: 'pending' | 'uploading' | 'success' | 'error';
-        error?: string;
-      }
-    > = {};
-    uploadFiles.forEach((file) => {
-      initialStatus[file.name] = { progress: 0, status: 'pending' };
-    });
-    setFileUploadStatus(initialStatus);
-
-    try {
-      // Get credentials
-      const accessToken =
-        typeof window !== 'undefined'
-          ? localStorage.getItem('accessToken')
-          : null;
-      if (!accessToken) {
-        throw new Error('No access token found. Please log in again.');
-      }
-
-      let baseUrl = '';
-      if (typeof window !== 'undefined') {
-        const pipelineStr = localStorage.getItem('pipeline');
-        if (pipelineStr) {
-          const pipeline = JSON.parse(pipelineStr);
-          baseUrl = pipeline?.deploymentUrl || '';
-        }
-        if (
-          !baseUrl &&
-          window.__RUNTIME_CONFIG__?.NEXT_PUBLIC_R2R_DEPLOYMENT_URL
-        ) {
-          baseUrl = window.__RUNTIME_CONFIG__.NEXT_PUBLIC_R2R_DEPLOYMENT_URL;
-        }
-      }
-      baseUrl = baseUrl.trim().replace(/\/$/, '');
-      if (!baseUrl) {
-        throw new Error('No deployment URL found. Please log in again.');
-      }
-
-      // Prepare collections
-      const collectionsToUse =
-        uploadCollectionIds.length > 0
-          ? uploadCollectionIds
-          : selectedCollectionId
-            ? [selectedCollectionId]
-            : [];
-
-      // Show info toast for hi-res mode (can take minutes for large files)
-      if (uploadQuality === 'hi-res') {
-        toast({
-          title: 'Processing Started',
-          description:
-            'Hi-res mode may take several minutes for large files. Progress will update.',
-          duration: 5000,
-        });
-      }
-
-      // PARALLEL UPLOAD with concurrency limit (3 files at a time)
-      const CONCURRENCY_LIMIT = 3;
-      const results: Array<{
-        file: string;
-        success: boolean;
-        documentId?: string;
-        error?: string;
-      }> = [];
-      let completedCount = 0;
-
-      // Process files in batches
-      for (let i = 0; i < uploadFiles.length; i += CONCURRENCY_LIMIT) {
-        if (abortController.signal.aborted) break;
-
-        const batch = uploadFiles.slice(i, i + CONCURRENCY_LIMIT);
-
-        // Mark batch as uploading
-        batch.forEach((file) => {
-          setFileUploadStatus((prev) => ({
-            ...prev,
-            [file.name]: { progress: 30, status: 'uploading' },
-          }));
-        });
-
-        // Upload batch in parallel with progress animation
-        const batchResults = await Promise.all(
-          batch.map(async (file) => {
-            if (abortController.signal.aborted) {
-              return {
-                file: file.name,
-                success: false,
-                error: 'Upload cancelled',
-              };
-            }
-
-            setUploadingFile(file.name);
-
-            // Start progress animation (30% -> 90% over time while waiting)
-            let currentProgress = 30;
-            const progressInterval = setInterval(() => {
-              if (currentProgress < 90) {
-                currentProgress += Math.random() * 5; // Random increment 0-5%
-                currentProgress = Math.min(currentProgress, 90);
-                setFileUploadStatus((prev) => ({
-                  ...prev,
-                  [file.name]: {
-                    progress: Math.round(currentProgress),
-                    status: 'uploading',
-                  },
-                }));
-              }
-            }, 500); // Update every 500ms
-
-            const result = await uploadSingleFile(
-              file,
-              baseUrl,
-              accessToken,
-              finalMetadata,
-              collectionsToUse,
-              uploadQuality,
-              abortController.signal
-            );
-
-            // Stop progress animation
-            clearInterval(progressInterval);
-            console.log(`✅ Upload result for ${file.name}:`, result);
-
-            // Update status
-            setFileUploadStatus((prev) => {
-              console.log(
-                `📊 Updating status for ${file.name}: ${result.success ? 'success' : 'error'}`
-              );
-              return {
-                ...prev,
-                [file.name]: {
-                  progress: result.success ? 100 : 0,
-                  status: result.success ? 'success' : 'error',
-                  error: result.error,
-                },
-              };
-            });
-
-            // Show individual toast
-            if (result.success) {
-              console.log(`🎉 Showing success toast for ${file.name}`);
-              toast({
-                title: 'File Uploaded',
-                description: `${file.name} uploaded successfully.`,
-              });
-
-              // Run post-upload tasks in background (non-blocking)
-              if (result.documentId) {
-                runPostUploadTasks(
-                  result.documentId,
-                  collectionsToUse,
-                  baseUrl,
-                  accessToken
-                ).catch(() => {}); // Ignore errors
-              }
-            } else {
-              toast({
-                title: 'Upload Failed',
-                description: `${file.name}: ${result.error}`,
-                variant: 'destructive',
-              });
-            }
-
-            return { file: file.name, ...result };
-          })
-        );
-
-        results.push(...batchResults);
-        completedCount += batch.length;
-        setUploadProgress((completedCount / uploadFiles.length) * 100);
-      }
-
-      // Calculate final counts
-      const successCount = results.filter((r) => r.success).length;
-      const errorCount = results.filter((r) => !r.success).length;
-
-      // Final toast
-      if (!abortController.signal.aborted) {
-        if (errorCount === 0 && successCount > 0) {
-          toast({
-            title: 'Upload Complete',
-            description: `Successfully uploaded ${successCount} file${successCount !== 1 ? 's' : ''}.`,
-            duration: 3000,
-          });
-        } else if (successCount > 0 && errorCount > 0) {
-          toast({
-            title: 'Partial Success',
-            description: `${successCount} uploaded, ${errorCount} failed.`,
-            variant: 'default',
-          });
-        }
-
-        // Close modal and reset state IMMEDIATELY (non-blocking)
-        setUploadFiles([]);
-        setUploadMetadata({});
-        setUploadModalOpen(false);
-        setUploadingFile('');
-        setUploadProgress(0);
-        setUploadQuality('hi-res');
-        setMetadataFields([]);
-        setFileUploadStatus({});
-
-        if (selectedCollectionId) {
-          setUploadCollectionIds([selectedCollectionId]);
-        } else {
-          setUploadCollectionIds([]);
-        }
-
-        // Refresh in background (non-blocking)
-        setTimeout(() => {
-          onCollectionChange();
-          fetchFiles();
-        }, 500);
-      }
-    } catch (error: any) {
-      console.error('Error in upload process:', error);
-      toast({
-        title: 'Upload Failed',
-        description: error?.message || 'Failed to upload files.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsUploading(false);
-      setUploadAbortController(null);
-      setUploadingFile('');
-    }
-  };
-
-  // Cancel upload handler
-  const handleCancelUpload = () => {
-    if (uploadAbortController) {
-      uploadAbortController.abort();
-      setUploadAbortController(null);
-    }
-    setIsUploading(false);
-    setUploadingFile('');
-    setUploadProgress(0);
-    setFileUploadStatus({});
-  };
-
   // Dropzone configuration
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: (acceptedFiles) => {
-      setUploadFiles((prev) => {
-        const newFiles = acceptedFiles.filter((newFile) => {
-          const isDuplicate = prev.some(
-            (existingFile) =>
-              existingFile.name === newFile.name &&
-              existingFile.size === newFile.size
-          );
-          return !isDuplicate;
-        });
-        return [...prev, ...newFiles];
+      const filtered = acceptedFiles.filter((newFile) => {
+        return !uploadFiles.some(
+          (existing) =>
+            existing.name === newFile.name && existing.size === newFile.size
+        );
       });
+      addFiles(filtered);
     },
     multiple: true,
   });
@@ -2444,19 +2179,10 @@ function FileManager({
             setUploadActiveTab('file');
           } else {
             // When closing dialog, reset everything
-            // Cancel any ongoing upload
-            if (isUploading && uploadAbortController) {
-              uploadAbortController.abort();
-            }
-            setUploadFiles([]);
+            clearUploadFiles();
             setUploadMetadata({});
-            setUploadProgress(0);
-            setUploadingFile('');
             setUploadQuality('hi-res'); // Reset to default
             setMetadataFields([]);
-            setFileUploadStatus({});
-            setIsUploading(false);
-            setUploadAbortController(null);
             setUploadActiveTab('file'); // Reset tab selection
             // Reset collections - will be set by useEffect if collection is selected
             if (selectedCollectionId) {
@@ -2547,9 +2273,7 @@ function FileManager({
                             className="h-6 w-6"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setUploadFiles((prev) =>
-                                prev.filter((_, i) => i !== index)
-                              );
+                              removeUploadFile(file.name);
                             }}
                           >
                             <X className="h-3 w-3" />
@@ -3018,20 +2742,11 @@ function FileManager({
                 <Button
                   variant="outline"
                   onClick={() => {
-                    // Cancel any ongoing upload
-                    if (isUploading && uploadAbortController) {
-                      uploadAbortController.abort();
-                    }
                     setUploadModalOpen(false);
-                    setUploadFiles([]);
+                    clearUploadFiles();
                     setUploadMetadata({});
-                    setUploadProgress(0);
-                    setUploadingFile('');
                     setUploadQuality('hi-res'); // Reset to default
                     setMetadataFields([]);
-                    setFileUploadStatus({});
-                    setIsUploading(false);
-                    setUploadAbortController(null);
                     // Reset collections - will be set by useEffect if collection is selected
                     if (selectedCollectionId) {
                       setUploadCollectionIds([selectedCollectionId]);
@@ -3044,13 +2759,19 @@ function FileManager({
                   {isUploading ? 'Close' : 'Cancel'}
                 </Button>
                 {isUploading ? (
-                  <Button variant="destructive" onClick={handleCancelUpload}>
+                  <Button variant="destructive" onClick={cancelUpload}>
                     <X className="h-4 w-4 mr-2" />
                     Cancel Upload
                   </Button>
                 ) : (
                   <Button
-                    onClick={handleFileUpload}
+                    onClick={() =>
+                      performUpload(
+                        uploadCollectionIds,
+                        uploadQuality as UploadQuality,
+                        uploadMetadata
+                      )
+                    }
                     disabled={uploadFiles.length === 0 || isUploading}
                   >
                     <Upload className="h-4 w-4 mr-2" />
@@ -3065,8 +2786,7 @@ function FileManager({
             <TabsContent value="url" className="space-y-6 py-4">
               <UrlUploadTab
                 onUpload={(files) => {
-                  // Add URL-fetched files to uploadFiles state
-                  setUploadFiles((prev) => [...prev, ...files]);
+                  addFiles(files);
                 }}
                 onSwitchToFileTab={() => setUploadActiveTab('file')}
                 isUploading={isUploading}
