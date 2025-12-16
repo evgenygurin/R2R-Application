@@ -23,9 +23,11 @@ export const ThinkingBlock: React.FC<ThinkingBlockProps> = ({
   const [isOpen, setIsOpen] = React.useState(false);
 
   return (
-    <Alert className={`bg-purple-500/10 border-purple-500/20 ${isActive ? 'animate-pulse' : ''}`}>
+    <Alert
+      className={`bg-purple-500/10 border-purple-500/30 ${isActive ? 'animate-pulse' : ''}`}
+    >
       <Brain className="h-4 w-4 text-purple-400" />
-      <AlertTitle className="text-purple-300 mb-2">
+      <AlertTitle className="text-purple-300 font-medium mb-2">
         <Collapsible open={isOpen} onOpenChange={setIsOpen}>
           <div className="flex items-center justify-between">
             <span>Agent Thinking</span>
@@ -39,11 +41,11 @@ export const ThinkingBlock: React.FC<ThinkingBlockProps> = ({
             </CollapsibleTrigger>
           </div>
           <CollapsibleContent>
-            <AlertDescription className="text-purple-200 mt-2 text-sm whitespace-pre-wrap">
+            <AlertDescription className="text-purple-200/90 mt-2 text-sm whitespace-pre-wrap">
               {content}
             </AlertDescription>
             {timestamp && (
-              <div className="text-xs text-purple-400/60 mt-1">
+              <div className="text-xs text-purple-400/70 mt-2">
                 {new Date(timestamp).toLocaleTimeString()}
               </div>
             )}

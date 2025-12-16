@@ -74,10 +74,10 @@ export const AgentActivityIndicator: React.FC<AgentActivityIndicatorProps> = ({
   return (
     <div className="my-2">
       <Accordion type="single" collapsible className="w-full">
-        <AccordionItem value="activities" className="border-zinc-700">
-          <AccordionTrigger className="py-2 text-sm hover:no-underline">
+        <AccordionItem value="activities" className="border-zinc-700/60">
+          <AccordionTrigger className="py-2 text-sm hover:no-underline hover:text-zinc-300">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-zinc-400">Agent Activity:</span>
+              <span className="text-zinc-400 font-medium">Agent Activity:</span>
               {Object.entries(activityCounts).map(([type, count]) => {
                 const style = getActivityStyle(type as AgentActivity['type']);
                 return (
@@ -118,15 +118,15 @@ export const AgentActivityIndicator: React.FC<AgentActivityIndicatorProps> = ({
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <span
-                            className={`text-xs font-semibold uppercase ${style.textColor}`}
+                            className={`text-xs font-semibold uppercase tracking-wide ${style.textColor}`}
                           >
                             {style.label}
                           </span>
-                          <span className="text-xs text-zinc-500">
+                          <span className="text-xs text-zinc-500/80">
                             {new Date(activity.timestamp).toLocaleTimeString()}
                           </span>
                         </div>
-                        <p className="text-sm text-zinc-300 whitespace-pre-wrap break-words">
+                        <p className="text-sm text-zinc-300/90 whitespace-pre-wrap break-words leading-relaxed">
                           {activity.content}
                         </p>
                       </div>
