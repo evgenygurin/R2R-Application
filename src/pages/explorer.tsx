@@ -3,11 +3,12 @@
 import { CollectionResponse } from 'r2r-js';
 import React, { useCallback, useEffect, useState } from 'react';
 
+import { CollectionTabs } from '@/components/explorer/CollectionTabs';
 import { ExplorerSidebar } from '@/components/explorer/ExplorerSidebar';
-import { FileManager } from '@/components/explorer/FileManager';
 import { Navbar } from '@/components/shared/NavBar';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { useUserContext } from '@/context/UserContext';
+import { useRouter } from 'next/router';
 
 /**
  * ExplorerPage - Главная страница файлового менеджера
@@ -23,6 +24,7 @@ export default function ExplorerPage() {
     string | null
   >(null);
   const [collections, setCollections] = useState<CollectionResponse[]>([]);
+  const router = useRouter();
 
   const fetchCollections = useCallback(async () => {
     if (!authState.isAuthenticated) return;
@@ -45,6 +47,45 @@ export default function ExplorerPage() {
     fetchCollections();
   }, [fetchCollections]);
 
+  // Sync selectedCollectionId with query params
+  useEffect(() => {
+    if (!router.isReady) return;
+
+    const collectionFromQuery = router.query.collection as string | undefined;
+
+    if (collectionFromQuery && collectionFromQuery !== selectedCollectionId) {
+      setSelectedCollectionId(collectionFromQuery);
+    } else if (!collectionFromQuery && selectedCollectionId === null) {
+      // Default collection logic - можно установить 'default' ID если известен
+      // Пока оставляем null
+    }
+  }, [router.isReady, router.query.collection, selectedCollectionId]);
+
+  // Update URL when selectedCollectionId changes
+  const handleCollectionSelect = useCallback(
+    (collectionId: string | null) => {
+      setSelectedCollectionId(collectionId);
+
+      const query: Record<string, string> = {};
+      if (collectionId) {
+        query.collection = collectionId;
+      }
+      if (router.query.tab) {
+        query.tab = router.query.tab as string;
+      }
+
+      router.push(
+        {
+          pathname: '/explorer',
+          query,
+        },
+        undefined,
+        { shallow: true }
+      );
+    },
+    [router]
+  );
+
   return (
     <div className="flex flex-col min-h-screen">
       <Navbar />
@@ -52,15 +93,15 @@ export default function ExplorerPage() {
         <ExplorerSidebar
           collapsible="icon"
           selectedCollectionId={selectedCollectionId}
-          onCollectionSelect={setSelectedCollectionId}
+          onCollectionSelect={handleCollectionSelect}
         />
         <SidebarInset>
           <div className="flex flex-1 flex-col gap-4 p-4">
-            <FileManager
+            <CollectionTabs
               selectedCollectionId={selectedCollectionId}
               collections={collections}
               onCollectionChange={fetchCollections}
-              onCollectionSelect={setSelectedCollectionId}
+              onCollectionSelect={handleCollectionSelect}
             />
           </div>
         </SidebarInset>
