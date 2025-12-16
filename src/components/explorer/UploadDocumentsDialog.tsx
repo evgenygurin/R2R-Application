@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { UploadQuality } from '@/types/explorer';
+import { FileUploadStatus, UploadQuality } from '@/types/explorer';
 
 export interface UploadDocumentsDialogProps {
   /** Whether the dialog is open */
@@ -31,7 +31,7 @@ export interface UploadDocumentsDialogProps {
   /** Files selected for upload */
   uploadFiles: File[];
   /** Upload status for each file */
-  uploadStatus: Record<string, { status: string; progress: number }>;
+  uploadStatus: Record<string, FileUploadStatus>;
   /** Whether upload is in progress */
   isUploading: boolean;
   /** Overall upload progress (0-100) */
@@ -123,7 +123,11 @@ export const UploadDocumentsDialog: React.FC<UploadDocumentsDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={onTabChange} className="w-full">
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => onTabChange(value as 'file' | 'url')}
+          className="w-full"
+        >
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="file" className="flex items-center gap-2">
               <Upload className="h-4 w-4" />
