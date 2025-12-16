@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import { Message } from '@/types';
 import { VectorSearchResult, KGSearchResult } from '@/types';
@@ -363,13 +364,21 @@ export const Answer: FC<{
         </AccordionItem>
       </Accordion>
 
-      {/* Agent Activity Indicator */}
+      {/* Separator between sources and activities */}
       {message.activities && message.activities.length > 0 && (
-        <AgentActivityIndicator
-          activities={message.activities}
-          isActive={isStreaming}
-        />
+        <>
+          <Separator className="my-4 bg-zinc-700" />
+          <AgentActivityIndicator
+            activities={message.activities}
+            isActive={isStreaming}
+          />
+        </>
       )}
+
+      {/* Separator between activities and content */}
+      {message.activities &&
+        message.activities.length > 0 &&
+        message.content && <Separator className="my-4 bg-zinc-700" />}
 
       <div className="space-y-4 mt-4">
         {message.content || isStreaming ? (
