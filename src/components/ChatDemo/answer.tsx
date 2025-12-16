@@ -214,7 +214,11 @@ export const Answer: FC<{
             const language = match ? match[1] : undefined;
             const codeString = String(children).replace(/\n$/, '');
 
-            if (!inline && codeString) {
+            // Показывать CodeBlock только для многострочного кода или с явным языком
+            const isMultiline = codeString.includes('\n');
+            const shouldUseCodeBlock = !inline && isMultiline && codeString.length > 50;
+
+            if (shouldUseCodeBlock) {
               return (
                 <CodeBlock
                   code={codeString}
