@@ -23,7 +23,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Button as ShadcnButton } from '@/components/ui/ShadcnButton';
+import { ShadcnButton } from '@/components/ui/ShadcnButton';
 
 interface FileCardProps {
   document: DocumentResponse;

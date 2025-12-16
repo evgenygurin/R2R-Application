@@ -423,7 +423,6 @@ export function DocumentDetailsDialog({
     }
   };
 
-
   // Update chunk
   const handleUpdateChunk = async () => {
     if (!editingChunkId) return;
@@ -504,9 +503,9 @@ export function DocumentDetailsDialog({
       <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-4 space-y-3">
           <div className="flex items-center gap-3 flex-wrap">
-              <DialogTitle className="text-lg font-semibold leading-tight">
-                {document.title || 'Untitled Document'}
-              </DialogTitle>
+            <DialogTitle className="text-lg font-semibold leading-tight">
+              {document.title || 'Untitled Document'}
+            </DialogTitle>
             <div className="flex items-center gap-2 flex-shrink-0">
               {getStatusBadge(document.ingestionStatus, 'ingestion')}
               {getStatusBadge(document.extractionStatus, 'extraction')}
@@ -612,9 +611,7 @@ export function DocumentDetailsDialog({
                     Document ID
                   </div>
                   <button
-                              onClick={() =>
-                                copyToClipboard(document.id, 'Document ID')
-                              }
+                    onClick={() => copyToClipboard(document.id, 'Document ID')}
                     className="group flex items-center w-full"
                     title="Click to copy"
                   >
@@ -631,7 +628,7 @@ export function DocumentDetailsDialog({
                       <Copy className="h-3 w-3 ml-1.5 opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />
                     </Badge>
                   </button>
-                          </div>
+                </div>
 
                 {/* Owner */}
                 {document.ownerId && (
@@ -670,9 +667,9 @@ export function DocumentDetailsDialog({
                   <div className="flex items-center gap-1.5 text-sm h-7">
                     <FileText className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
                     <span className="text-foreground">
-                                {document.documentType || 'N/A'}
-                              </span>
-                            </div>
+                      {document.documentType || 'N/A'}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Size */}
@@ -681,10 +678,10 @@ export function DocumentDetailsDialog({
                     Size
                   </div>
                   <div className="text-sm text-foreground h-7 flex items-center">
-                              {formatFileSize(
-                                (document as any).sizeInBytes ||
-                                  (document as any).size_in_bytes
-                              )}
+                    {formatFileSize(
+                      (document as any).sizeInBytes ||
+                        (document as any).size_in_bytes
+                    )}
                   </div>
                 </div>
 
@@ -708,9 +705,9 @@ export function DocumentDetailsDialog({
                   <div className="flex items-center gap-1.5 text-sm h-7">
                     <Calendar className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
                     <span className="text-foreground">
-                                {formatDateHelper(document.createdAt)}
-                              </span>
-                            </div>
+                      {formatDateHelper(document.createdAt)}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Updated */}
@@ -721,10 +718,10 @@ export function DocumentDetailsDialog({
                   <div className="flex items-center gap-1.5 text-sm h-7">
                     <Calendar className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
                     <span className="text-foreground">
-                                {formatDateHelper(document.updatedAt)}
-                              </span>
-                            </div>
-                            </div>
+                      {formatDateHelper(document.updatedAt)}
+                    </span>
+                  </div>
+                </div>
 
                 {/* Attempts */}
                 {(document as any).ingestion_attempt_number !== undefined && (
@@ -733,20 +730,20 @@ export function DocumentDetailsDialog({
                       Attempts
                     </div>
                     <div className="text-sm text-foreground h-7 flex items-center">
-                                {(document as any).ingestion_attempt_number}
-                      </div>
+                      {(document as any).ingestion_attempt_number}
+                    </div>
                   </div>
                 )}
 
                 {/* Metadata - исключая version */}
-                      {(document as any).metadata &&
+                {(document as any).metadata &&
                   Object.entries((document as any).metadata)
                     .filter(([key]) => key.toLowerCase() !== 'version')
                     .map(([key, value]) => (
                       <div key={key} className="space-y-1.5">
                         <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                           {key}
-                              </div>
+                        </div>
                         <div className="flex items-center gap-1.5 text-sm h-7">
                           <Tag className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
                           <span className="break-words flex-1 text-foreground line-clamp-1">
@@ -760,51 +757,50 @@ export function DocumentDetailsDialog({
               </div>
 
               {/* Collection IDs - в самом низу, последними */}
-                      {document.collectionIds &&
-                        document.collectionIds.length > 0 && (
-                  <div className="pt-3 border-t space-y-2">
-                    <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-                      Collection IDs
-                    </div>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {document.collectionIds.map((id, index) => (
-                        <button
-                                    key={id}
-                          onClick={() => copyToClipboard(id, 'Collection ID')}
-                          className="group flex items-center"
-                          title="Click to copy"
-                        >
-                          <Badge
-                            variant="secondary"
-                            className="bg-muted/40 border border-border/50 font-mono text-[11px] px-2 py-1 h-7 hover:bg-muted/60 transition-colors"
-                          >
-                            {index === 0 && (
-                              <Folder className="h-3 w-3 mr-1.5 shrink-0 opacity-60" />
-                            )}
-                            <span className="max-w-[200px] truncate text-[11px]">
-                              {id.length > 24 ? `${id.slice(0, 24)}...` : id}
-                            </span>
-                            <Copy className="h-3 w-3 ml-1.5 opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />
-                                  </Badge>
-                        </button>
-                                ))}
-                              </div>
+              {document.collectionIds && document.collectionIds.length > 0 && (
+                <div className="pt-3 border-t space-y-2">
+                  <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                    Collection IDs
                   </div>
-                        )}
-              </TabsContent>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {document.collectionIds.map((id, index) => (
+                      <button
+                        key={id}
+                        onClick={() => copyToClipboard(id, 'Collection ID')}
+                        className="group flex items-center"
+                        title="Click to copy"
+                      >
+                        <Badge
+                          variant="secondary"
+                          className="bg-muted/40 border border-border/50 font-mono text-[11px] px-2 py-1 h-7 hover:bg-muted/60 transition-colors"
+                        >
+                          {index === 0 && (
+                            <Folder className="h-3 w-3 mr-1.5 shrink-0 opacity-60" />
+                          )}
+                          <span className="max-w-[200px] truncate text-[11px]">
+                            {id.length > 24 ? `${id.slice(0, 24)}...` : id}
+                          </span>
+                          <Copy className="h-3 w-3 ml-1.5 opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />
+                        </Badge>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </TabsContent>
 
             <TabsContent value="chunks" className="mt-4 space-y-3">
-                {chunksLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                  </div>
-                ) : chunks && chunks.length > 0 ? (
+              {chunksLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : chunks && chunks.length > 0 ? (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="text-sm text-muted-foreground">
-                        {chunksTotal > 0
+                      {chunksTotal > 0
                         ? `Showing ${(chunksPage - 1) * chunksPageSize + 1} to ${Math.min(chunksPage * chunksPageSize, chunksTotal)} of ${chunksTotal} chunks`
-                          : 'No chunks available'}
+                        : 'No chunks available'}
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-muted-foreground">
@@ -861,15 +857,15 @@ export function DocumentDetailsDialog({
                                         {metadataCount} metadata field
                                         {metadataCount !== 1 ? 's' : ''}
                                       </Badge>
-                                  )}
-                              </div>
+                                    )}
+                                  </div>
                                   <div
                                     className="flex items-center gap-1"
                                     onClick={(e) => e.stopPropagation()}
                                   >
-                              <Button
-                                variant="ghost"
-                                size="icon"
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
                                       className="h-7 w-7"
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -877,16 +873,18 @@ export function DocumentDetailsDialog({
                                           (c) => c.id === chunk.id
                                         );
                                         if (currentChunk) {
-                                          setEditChunkText(currentChunk.text || '');
+                                          setEditChunkText(
+                                            currentChunk.text || ''
+                                          );
                                           setEditingChunkId(chunk.id);
                                         }
                                       }}
-                              >
+                                    >
                                       <Edit className="h-3.5 w-3.5" />
                                       <span className="sr-only">
                                         Edit chunk
                                       </span>
-                              </Button>
+                                    </Button>
                                     <Button
                                       variant="ghost"
                                       size="icon"
@@ -915,93 +913,93 @@ export function DocumentDetailsDialog({
                       </Accordion>
                     </div>
                   </ScrollArea>
-                    {chunksTotalPages > 1 && (
+                  {chunksTotalPages > 1 && (
                     <div className="flex items-center justify-between pt-3">
-                        <div className="text-sm text-muted-foreground">
+                      <div className="text-sm text-muted-foreground">
                         Page {chunksPage} of {chunksTotalPages}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                          className="h-8 w-8"
-                            onClick={() => goToChunksPage(1)}
-                          disabled={chunksPage === 1 || chunksLoading}
-                          >
-                            <ChevronsLeft className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                          className="h-8 w-8"
-                            onClick={() => goToChunksPage(chunksPage - 1)}
-                          disabled={chunksPage === 1 || chunksLoading}
-                          >
-                            <ChevronLeft className="h-4 w-4" />
-                          </Button>
-                          <Select
-                            value={chunksPage.toString()}
-                            onValueChange={(value) =>
-                              goToChunksPage(Number.parseInt(value))
-                            }
-                          disabled={chunksLoading}
-                          >
-                          <SelectTrigger className="w-16 h-8">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Array.from(
-                                { length: chunksTotalPages },
-                                (_, i) => i + 1
-                              ).map((page) => (
-                                <SelectItem key={page} value={page.toString()}>
-                                  {page}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <span className="text-sm text-muted-foreground">
-                            of {chunksTotalPages}
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                          className="h-8 w-8"
-                            onClick={() => goToChunksPage(chunksPage + 1)}
-                          disabled={
-                            chunksPage === chunksTotalPages || chunksLoading
-                          }
-                          >
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                          className="h-8 w-8"
-                            onClick={() => goToChunksPage(chunksTotalPages)}
-                          disabled={
-                            chunksPage === chunksTotalPages || chunksLoading
-                          }
-                          >
-                            <ChevronsRight className="h-4 w-4" />
-                          </Button>
-                        </div>
                       </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center py-12 text-muted-foreground">
-                    No chunks available
-                  </div>
-                )}
-              </TabsContent>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => goToChunksPage(1)}
+                          disabled={chunksPage === 1 || chunksLoading}
+                        >
+                          <ChevronsLeft className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => goToChunksPage(chunksPage - 1)}
+                          disabled={chunksPage === 1 || chunksLoading}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <Select
+                          value={chunksPage.toString()}
+                          onValueChange={(value) =>
+                            goToChunksPage(Number.parseInt(value))
+                          }
+                          disabled={chunksLoading}
+                        >
+                          <SelectTrigger className="w-16 h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from(
+                              { length: chunksTotalPages },
+                              (_, i) => i + 1
+                            ).map((page) => (
+                              <SelectItem key={page} value={page.toString()}>
+                                {page}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <span className="text-sm text-muted-foreground">
+                          of {chunksTotalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => goToChunksPage(chunksPage + 1)}
+                          disabled={
+                            chunksPage === chunksTotalPages || chunksLoading
+                          }
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => goToChunksPage(chunksTotalPages)}
+                          disabled={
+                            chunksPage === chunksTotalPages || chunksLoading
+                          }
+                        >
+                          <ChevronsRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-muted-foreground">
+                  No chunks available
+                </div>
+              )}
+            </TabsContent>
 
             <TabsContent value="entities" className="mt-4 space-y-3">
-                {entitiesLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                  </div>
-                ) : entities && entities.length > 0 ? (
+              {entitiesLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : entities && entities.length > 0 ? (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="text-sm text-muted-foreground">
@@ -1047,35 +1045,35 @@ export function DocumentDetailsDialog({
                                 <div className="flex items-center justify-between w-full pr-4">
                                   <div className="flex items-center gap-2">
                                     <span className="text-sm text-foreground font-medium">
-                                {entity.name}
+                                      {entity.name}
                                     </span>
-                              {entity.category && (
+                                    {entity.category && (
                                       <Badge
                                         variant="outline"
                                         className="text-xs"
                                       >
-                                    {entity.category}
-                                  </Badge>
+                                        {entity.category}
+                                      </Badge>
                                     )}
                                   </div>
                                   <div
                                     className="flex items-center gap-1"
                                     onClick={(e) => e.stopPropagation()}
                                   >
-                              <Button
-                                variant="ghost"
-                                size="icon"
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
                                       className="h-7 w-7 text-destructive hover:text-destructive"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setDeleteEntityId(entity.id);
                                       }}
-                              >
+                                    >
                                       <Trash2 className="h-3.5 w-3.5" />
                                       <span className="sr-only">
                                         Delete entity
                                       </span>
-                              </Button>
+                                    </Button>
                                   </div>
                                 </div>
                               </AccordionTrigger>
@@ -1092,95 +1090,95 @@ export function DocumentDetailsDialog({
                       </Accordion>
                     </div>
                   </ScrollArea>
-                    {entitiesTotalPages > 1 && (
+                  {entitiesTotalPages > 1 && (
                     <div className="flex items-center justify-between pt-3">
-                        <div className="text-sm text-muted-foreground">
+                      <div className="text-sm text-muted-foreground">
                         Page {entitiesPage} of {entitiesTotalPages}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                          className="h-8 w-8"
-                            onClick={() => goToEntitiesPage(1)}
-                          disabled={entitiesPage === 1 || entitiesLoading}
-                          >
-                            <ChevronsLeft className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                          className="h-8 w-8"
-                            onClick={() => goToEntitiesPage(entitiesPage - 1)}
-                          disabled={entitiesPage === 1 || entitiesLoading}
-                          >
-                            <ChevronLeft className="h-4 w-4" />
-                          </Button>
-                          <Select
-                            value={entitiesPage.toString()}
-                            onValueChange={(value) =>
-                              goToEntitiesPage(Number.parseInt(value))
-                            }
-                          disabled={entitiesLoading}
-                          >
-                          <SelectTrigger className="w-16 h-8">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Array.from(
-                                { length: entitiesTotalPages },
-                                (_, i) => i + 1
-                              ).map((page) => (
-                                <SelectItem key={page} value={page.toString()}>
-                                  {page}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <span className="text-sm text-muted-foreground">
-                            of {entitiesTotalPages}
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                          className="h-8 w-8"
-                            onClick={() => goToEntitiesPage(entitiesPage + 1)}
-                          disabled={
-                            entitiesPage === entitiesTotalPages ||
-                            entitiesLoading
-                          }
-                          >
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                          className="h-8 w-8"
-                            onClick={() => goToEntitiesPage(entitiesTotalPages)}
-                          disabled={
-                            entitiesPage === entitiesTotalPages ||
-                            entitiesLoading
-                          }
-                          >
-                            <ChevronsRight className="h-4 w-4" />
-                          </Button>
-                        </div>
                       </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center py-12 text-muted-foreground">
-                    No entities available
-                  </div>
-                )}
-              </TabsContent>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => goToEntitiesPage(1)}
+                          disabled={entitiesPage === 1 || entitiesLoading}
+                        >
+                          <ChevronsLeft className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => goToEntitiesPage(entitiesPage - 1)}
+                          disabled={entitiesPage === 1 || entitiesLoading}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <Select
+                          value={entitiesPage.toString()}
+                          onValueChange={(value) =>
+                            goToEntitiesPage(Number.parseInt(value))
+                          }
+                          disabled={entitiesLoading}
+                        >
+                          <SelectTrigger className="w-16 h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from(
+                              { length: entitiesTotalPages },
+                              (_, i) => i + 1
+                            ).map((page) => (
+                              <SelectItem key={page} value={page.toString()}>
+                                {page}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <span className="text-sm text-muted-foreground">
+                          of {entitiesTotalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => goToEntitiesPage(entitiesPage + 1)}
+                          disabled={
+                            entitiesPage === entitiesTotalPages ||
+                            entitiesLoading
+                          }
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => goToEntitiesPage(entitiesTotalPages)}
+                          disabled={
+                            entitiesPage === entitiesTotalPages ||
+                            entitiesLoading
+                          }
+                        >
+                          <ChevronsRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-muted-foreground">
+                  No entities available
+                </div>
+              )}
+            </TabsContent>
 
             <TabsContent value="relationships" className="mt-4 space-y-3">
-                {relationshipsLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                  </div>
-                ) : relationships && relationships.length > 0 ? (
+              {relationshipsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : relationships && relationships.length > 0 ? (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="text-sm text-muted-foreground">
@@ -1232,8 +1230,8 @@ export function DocumentDetailsDialog({
                                       variant="outline"
                                       className="text-xs font-normal"
                                     >
-                                  {relationship.predicate}
-                                </Badge>
+                                      {relationship.predicate}
+                                    </Badge>
                                     <span className="text-sm text-foreground">
                                       {relationship.object}
                                     </span>
@@ -1241,11 +1239,11 @@ export function DocumentDetailsDialog({
                                 </div>
                               </AccordionTrigger>
                               <AccordionContent className="pt-0 pb-2.5">
-                              {relationship.description && (
+                                {relationship.description && (
                                   <p className="text-sm text-muted-foreground leading-relaxed">
-                                  {relationship.description}
+                                    {relationship.description}
                                   </p>
-                              )}
+                                )}
                               </AccordionContent>
                             </AccordionItem>
                           );
@@ -1253,99 +1251,99 @@ export function DocumentDetailsDialog({
                       </Accordion>
                     </div>
                   </ScrollArea>
-                    {relationshipsTotalPages > 1 && (
+                  {relationshipsTotalPages > 1 && (
                     <div className="flex items-center justify-between pt-3">
-                        <div className="text-sm text-muted-foreground">
+                      <div className="text-sm text-muted-foreground">
                         Page {relationshipsPage} of {relationshipsTotalPages}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                          className="h-8 w-8"
-                            onClick={() => goToRelationshipsPage(1)}
-                          disabled={
-                            relationshipsPage === 1 || relationshipsLoading
-                          }
-                          >
-                            <ChevronsLeft className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                          className="h-8 w-8"
-                            onClick={() =>
-                              goToRelationshipsPage(relationshipsPage - 1)
-                            }
-                          disabled={
-                            relationshipsPage === 1 || relationshipsLoading
-                          }
-                          >
-                            <ChevronLeft className="h-4 w-4" />
-                          </Button>
-                          <Select
-                            value={relationshipsPage.toString()}
-                            onValueChange={(value) =>
-                              goToRelationshipsPage(Number.parseInt(value))
-                            }
-                          disabled={relationshipsLoading}
-                          >
-                          <SelectTrigger className="w-16 h-8">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Array.from(
-                                { length: relationshipsTotalPages },
-                                (_, i) => i + 1
-                              ).map((page) => (
-                                <SelectItem key={page} value={page.toString()}>
-                                  {page}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <span className="text-sm text-muted-foreground">
-                            of {relationshipsTotalPages}
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                          className="h-8 w-8"
-                            onClick={() =>
-                              goToRelationshipsPage(relationshipsPage + 1)
-                            }
-                          disabled={
-                            relationshipsPage === relationshipsTotalPages ||
-                            relationshipsLoading
-                          }
-                          >
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                          className="h-8 w-8"
-                            onClick={() =>
-                              goToRelationshipsPage(relationshipsTotalPages)
-                            }
-                          disabled={
-                            relationshipsPage === relationshipsTotalPages ||
-                            relationshipsLoading
-                          }
-                          >
-                            <ChevronsRight className="h-4 w-4" />
-                          </Button>
-                        </div>
                       </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center py-12 text-muted-foreground">
-                    No relationships available
-                  </div>
-                )}
-              </TabsContent>
-            </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => goToRelationshipsPage(1)}
+                          disabled={
+                            relationshipsPage === 1 || relationshipsLoading
+                          }
+                        >
+                          <ChevronsLeft className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() =>
+                            goToRelationshipsPage(relationshipsPage - 1)
+                          }
+                          disabled={
+                            relationshipsPage === 1 || relationshipsLoading
+                          }
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <Select
+                          value={relationshipsPage.toString()}
+                          onValueChange={(value) =>
+                            goToRelationshipsPage(Number.parseInt(value))
+                          }
+                          disabled={relationshipsLoading}
+                        >
+                          <SelectTrigger className="w-16 h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from(
+                              { length: relationshipsTotalPages },
+                              (_, i) => i + 1
+                            ).map((page) => (
+                              <SelectItem key={page} value={page.toString()}>
+                                {page}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <span className="text-sm text-muted-foreground">
+                          of {relationshipsTotalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() =>
+                            goToRelationshipsPage(relationshipsPage + 1)
+                          }
+                          disabled={
+                            relationshipsPage === relationshipsTotalPages ||
+                            relationshipsLoading
+                          }
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() =>
+                            goToRelationshipsPage(relationshipsTotalPages)
+                          }
+                          disabled={
+                            relationshipsPage === relationshipsTotalPages ||
+                            relationshipsLoading
+                          }
+                        >
+                          <ChevronsRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-muted-foreground">
+                  No relationships available
+                </div>
+              )}
+            </TabsContent>
+          </div>
         </Tabs>
       </DialogContent>
 
@@ -1462,7 +1460,7 @@ export function DocumentDetailsDialog({
               )}
             </Button>
           </div>
-      </DialogContent>
+        </DialogContent>
       </Dialog>
     </Dialog>
   );

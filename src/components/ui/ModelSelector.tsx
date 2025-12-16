@@ -92,7 +92,6 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ id }) => {
             />
             <Button
               onClick={handleCustomModelSubmit}
-              color="primary"
               className="mt-4 inline-flex justify-center py-2 px-4 "
             >
               Submit

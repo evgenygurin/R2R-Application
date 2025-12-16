@@ -578,10 +578,7 @@ const ManagePage: React.FC = () => {
                     <h2 className="text-xl font-semibold text-white">
                       Collections
                     </h2>
-                    <Button
-                      onClick={() => setIsCollectionModalOpen(true)}
-                      color="filled"
-                    >
+                    <Button onClick={() => setIsCollectionModalOpen(true)}>
                       New Collection
                     </Button>
                   </div>

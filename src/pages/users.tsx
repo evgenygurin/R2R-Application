@@ -224,8 +224,6 @@ const Index: React.FC = () => {
                       setSelectedUserID(user.id);
                       setIsUserInfoDialogOpen(true);
                     }}
-                    color="filled"
-                    shape="slim"
                     className="flex justify-center items-center"
                   >
                     <UserSearch className="h-8 w-8" />

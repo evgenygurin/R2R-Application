@@ -20,10 +20,10 @@ module.exports = {
     extend: {
       fontSize: {
         // Размеры шрифта как в IDE (Cursor/VS Code)
-        xs: ['12px', { lineHeight: '1.5' }],      // Мелкий текст (12px)
-        sm: ['13px', { lineHeight: '1.5' }],      // Основной текст (13px)
-        base: ['13px', { lineHeight: '1.5' }],    // Базовый (13px)
-        lg: ['14px', { lineHeight: '1.5' }],      // Заголовки (14px)
+        xs: ['12px', { lineHeight: '1.5' }], // Мелкий текст (12px)
+        sm: ['13px', { lineHeight: '1.5' }], // Основной текст (13px)
+        base: ['13px', { lineHeight: '1.5' }], // Базовый (13px)
+        lg: ['14px', { lineHeight: '1.5' }], // Заголовки (14px)
         xl: ['16px', { lineHeight: '1.5' }],
         '2xl': ['18px', { lineHeight: '1.4' }],
         '3xl': ['20px', { lineHeight: '1.3' }],

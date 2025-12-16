@@ -69,9 +69,11 @@ export function AppSidebar({
       {!isCollapsed && (
         <SidebarHeader className="border-b border-zinc-700 !pt-1">
           <div className="px-6 py-2">
-            <h2 className="text-lg font-semibold text-white mb-2">Collections</h2>
-        </div>
-      </SidebarHeader>
+            <h2 className="text-lg font-semibold text-white mb-2">
+              Collections
+            </h2>
+          </div>
+        </SidebarHeader>
       )}
 
       <SidebarContent className="!pt-1">
@@ -83,7 +85,7 @@ export function AppSidebar({
                 <SidebarMenuButton
                   onClick={onAllDocumentsClick}
                   isActive={selectedCollectionId === null}
-                  tooltip="All Documents"
+                  title="All Documents"
                 >
                   <FileText className="w-4 h-4" />
                   <span>All Documents</span>
@@ -106,7 +108,7 @@ export function AppSidebar({
                     <SidebarMenuButton
                       onClick={() => onCollectionClick(collection.id)}
                       isActive={selectedCollectionId === collection.id}
-                      tooltip={collection.name || collection.id}
+                      title={collection.name || collection.id}
                     >
                       <Folder className="w-4 h-4" />
                       <span className="truncate">
@@ -133,7 +135,7 @@ export function AppSidebar({
                     <SidebarMenuButton
                       onClick={() => onCollectionClick(collection.id)}
                       isActive={selectedCollectionId === collection.id}
-                      tooltip={collection.name || collection.id}
+                      title={collection.name || collection.id}
                     >
                       <Folder className="w-4 h-4" />
                       <span className="truncate">

@@ -3,12 +3,12 @@ import React, { useState, useMemo } from 'react';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import CopyableContent from '@/components/ui/CopyableContent';
-import Pagination from '@/components/ui/pagination';
 import {
   Popover,
   PopoverTrigger,
   PopoverContent,
 } from '@/components/ui/popover';
+import { TablePagination } from '@/components/ui/TablePagination';
 import {
   Tooltip,
   TooltipContent,
@@ -441,7 +441,7 @@ function Table<T extends object>({
       </div>
       {showPagination && (
         <div>
-          <Pagination
+          <TablePagination
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={handlePageChangeInternal}

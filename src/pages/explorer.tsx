@@ -259,7 +259,7 @@ function AppSidebar({
                 <SidebarMenuButton
                   isActive={selectedCollectionId === null}
                   onClick={() => onCollectionSelect(null)}
-                  tooltip="All Documents"
+                  title="All Documents"
                 >
                   <FileText />
                   All Documents
@@ -281,7 +281,7 @@ function AppSidebar({
                     <SidebarMenuButton
                       isActive={selectedCollectionId === collection.id}
                       onClick={() => onCollectionSelect(collection.id)}
-                      tooltip={collection.name || collection.id}
+                      title={collection.name || collection.id}
                     >
                       <Folder />
                       <span className="truncate">
@@ -2383,7 +2383,9 @@ function FileManager({
                     ) : (
                       <>
                         <Folder className="h-4 w-4 shrink-0" />
-                        <span className="truncate whitespace-nowrap block min-w-0">{path}</span>
+                        <span className="truncate whitespace-nowrap block min-w-0">
+                          {path}
+                        </span>
                       </>
                     )}
                   </button>
@@ -2615,7 +2617,6 @@ function FileManager({
                 <span className="sr-only">Grid view</span>
               </Button>
             </div>
-
           </div>
         </div>
       </div>

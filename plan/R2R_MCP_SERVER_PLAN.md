@@ -1,4 +1,5 @@
 # План реализации R2R MCP Server на FastMCP
+
 ## R2R MCP Server Implementation Plan using FastMCP
 
 > **Цель:** Создать полнофункциональный MCP server, который предоставляет все возможности R2R API через Model Context Protocol для максимальной эффективности программиста
@@ -12,13 +13,15 @@
 **Основные компоненты:**
 
 1. **FastMCP Server** - центральный объект MCP приложения
+
    ```python
    from fastmcp import FastMCP
-   
+
    mcp = FastMCP(name="R2RServer")
    ```
 
 2. **Tools** - исполняемые функции для LLM
+
    ```python
    @mcp.tool
    def my_tool(param: str) -> str:
@@ -27,6 +30,7 @@
    ```
 
 3. **Resources** - read-only источники данных
+
    ```python
    @mcp.resource("r2r://documents/{id}")
    def get_document(id: str):
@@ -34,6 +38,7 @@
    ```
 
 4. **Prompts** - переиспользуемые шаблоны
+
    ```python
    @mcp.prompt
    def code_review_prompt(code: str) -> str:
@@ -52,11 +57,13 @@
 ### 1.2 MCP Protocol Capabilities
 
 **Transport Options:**
+
 - **STDIO** - для локальных серверов
 - **HTTP/SSE** - для удаленных серверов
 - **Streamable HTTP** - рекомендуемый для production
 
 **Features:**
+
 - Streaming responses
 - Progress reporting
 - Resource access
@@ -133,22 +140,22 @@ import os
 
 class R2RClientWrapper:
     """Wrapper для R2R API с Gemini оптимизацией."""
-    
+
     def __init__(self, base_url: Optional[str] = None, api_key: Optional[str] = None):
         self.base_url = base_url or os.getenv("R2R_BASE_URL", "http://localhost:7272")
         self.api_key = api_key or os.getenv("R2R_API_KEY")
         self.client = R2RClient(base_url=self.base_url, api_key=self.api_key)
-        
+
         # Gemini конфигурация по умолчанию
         self.default_gemini_config = {
             "model": "google/gemini-2.5-flash",
             "temperature": 0.3,
             "thinking_budget": -1,  # Dynamic
         }
-    
+
     def get_client(self) -> R2RClient:
         return self.client
-    
+
     def get_gemini_config(self, task_type: str = "rag") -> Dict[str, Any]:
         """Получить Gemini конфигурацию для задачи."""
         configs = {
@@ -186,7 +193,7 @@ import asyncio
 
 def register_document_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
     """Регистрация document tools."""
-    
+
     @mcp.tool
     async def upload_document(
         file_path: str,
@@ -197,7 +204,7 @@ def register_document_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
     ) -> Dict[str, Any]:
         """
         Upload a document to R2R.
-        
+
         Args:
             file_path: Path to the file to upload
             collection_ids: List of collection IDs to add document to
@@ -206,7 +213,7 @@ def register_document_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
         """
         if ctx:
             await ctx.info(f"Uploading document: {file_path}")
-        
+
         try:
             with open(file_path, 'rb') as f:
                 result = await asyncio.to_thread(
@@ -216,10 +223,10 @@ def register_document_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
                     ingestion_mode=ingestion_mode,
                     metadata=metadata or {}
                 )
-            
+
             if ctx:
                 await ctx.info(f"Document uploaded successfully: {result.results.id}")
-            
+
             return {
                 "document_id": result.results.id,
                 "status": "success",
@@ -229,7 +236,7 @@ def register_document_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
             if ctx:
                 await ctx.error(f"Error uploading document: {str(e)}")
             raise
-    
+
     @mcp.tool
     async def get_document(
         document_id: str,
@@ -238,12 +245,12 @@ def register_document_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
         """Retrieve a document by ID."""
         if ctx:
             await ctx.info(f"Retrieving document: {document_id}")
-        
+
         result = await asyncio.to_thread(
             r2r_client.client.documents.retrieve,
             id=document_id
         )
-        
+
         return {
             "id": result.results.id,
             "title": result.results.title,
@@ -251,7 +258,7 @@ def register_document_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
             "ingestion_status": result.results.ingestionStatus,
             "chunk_count": result.results.chunkCount,
         }
-    
+
     @mcp.tool
     async def list_documents(
         limit: int = 20,
@@ -262,14 +269,14 @@ def register_document_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
         """List documents with pagination and filters."""
         if ctx:
             await ctx.info(f"Listing documents (limit={limit}, offset={offset})")
-        
+
         result = await asyncio.to_thread(
             r2r_client.client.documents.list,
             limit=limit,
             offset=offset,
             filters=filters
         )
-        
+
         return {
             "documents": [
                 {
@@ -282,7 +289,7 @@ def register_document_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
             ],
             "total": len(result.results),
         }
-    
+
     @mcp.tool
     async def delete_document(
         document_id: str,
@@ -291,14 +298,14 @@ def register_document_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
         """Delete a document."""
         if ctx:
             await ctx.info(f"Deleting document: {document_id}")
-        
+
         await asyncio.to_thread(
             r2r_client.client.documents.delete,
             id=document_id
         )
-        
+
         return {"status": "deleted", "document_id": document_id}
-    
+
     @mcp.tool
     async def update_document_metadata(
         document_id: str,
@@ -308,13 +315,13 @@ def register_document_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
         """Update document metadata."""
         if ctx:
             await ctx.info(f"Updating metadata for document: {document_id}")
-        
+
         result = await asyncio.to_thread(
             r2r_client.client.documents.update,
             id=document_id,
             metadata=metadata
         )
-        
+
         return {"status": "updated", "document_id": document_id}
 ```
 
@@ -329,7 +336,7 @@ import asyncio
 
 def register_search_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
     """Регистрация search tools."""
-    
+
     @mcp.tool
     async def semantic_search(
         query: str,
@@ -340,7 +347,7 @@ def register_search_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
     ) -> Dict[str, Any]:
         """
         Perform semantic search with optional hybrid search.
-        
+
         Args:
             query: Search query
             limit: Maximum number of results
@@ -350,25 +357,25 @@ def register_search_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
         if ctx:
             await ctx.info(f"Searching: {query}")
             await ctx.report_progress(0, 100, "Starting search")
-        
+
         search_settings = {
             "use_semantic_search": True,
             "use_hybrid_search": use_hybrid,
             "limit": limit,
         }
-        
+
         if filters:
             search_settings["filters"] = filters
-        
+
         result = await asyncio.to_thread(
             r2r_client.client.retrieval.search,
             query=query,
             search_settings=search_settings
         )
-        
+
         if ctx:
             await ctx.report_progress(100, 100, "Search completed")
-        
+
         return {
             "query": query,
             "results": [
@@ -382,7 +389,7 @@ def register_search_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
             ],
             "total": len(result.results.chunk_search_results),
         }
-    
+
     @mcp.tool
     async def hyde_search(
         query: str,
@@ -392,34 +399,34 @@ def register_search_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
     ) -> Dict[str, Any]:
         """
         Perform HyDE (Hypothetical Document Embeddings) search.
-        
+
         HyDE generates a hypothetical document that would answer the query,
         then searches using that document.
         """
         if ctx:
             await ctx.info(f"HyDE search: {query}")
-        
+
         search_settings = {
             "search_strategy": "hyde",
             "limit": limit,
         }
-        
+
         if filters:
             search_settings["filters"] = filters
-        
+
         result = await asyncio.to_thread(
             r2r_client.client.retrieval.rag,
             query=query,
             search_settings=search_settings,
             rag_generation_config=r2r_client.get_gemini_config("rag")
         )
-        
+
         return {
             "query": query,
             "strategy": "hyde",
             "results": result.results,
         }
-    
+
     @mcp.tool
     async def code_search(
         query: str,
@@ -430,7 +437,7 @@ def register_search_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
     ) -> Dict[str, Any]:
         """
         Search for code snippets.
-        
+
         Args:
             query: Search query
             language: Programming language filter (e.g., 'python', 'typescript')
@@ -439,30 +446,30 @@ def register_search_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
         """
         if ctx:
             await ctx.info(f"Code search: {query}")
-        
+
         filters = {
             "code_type": {"$eq": "source_code"},
         }
-        
+
         if language:
             filters["language"] = {"$eq": language}
-        
+
         if function_name:
             filters["function_name"] = {"$eq": function_name}
-        
+
         search_settings = {
             "use_semantic_search": True,
             "use_hybrid_search": True,
             "filters": filters,
             "limit": limit,
         }
-        
+
         result = await asyncio.to_thread(
             r2r_client.client.retrieval.search,
             query=query,
             search_settings=search_settings
         )
-        
+
         return {
             "query": query,
             "language": language,
@@ -481,7 +488,7 @@ def register_search_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
 
 ### 3.3 RAG Tools
 
-```python
+````python
 # src/tools/rag.py
 from fastmcp import FastMCP, Context
 from typing import Optional, Dict, Any
@@ -490,7 +497,7 @@ import asyncio
 
 def register_rag_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
     """Регистрация RAG tools."""
-    
+
     @mcp.tool
     async def rag_query(
         query: str,
@@ -501,7 +508,7 @@ def register_rag_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
     ) -> Dict[str, Any]:
         """
         Perform RAG (Retrieval-Augmented Generation) query.
-        
+
         Args:
             query: User query
             search_settings: Custom search settings
@@ -511,37 +518,37 @@ def register_rag_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
         if ctx:
             await ctx.info(f"RAG query: {query}")
             await ctx.report_progress(0, 100, "Retrieving context")
-        
+
         # Default search settings
         default_search = {
             "use_semantic_search": True,
             "use_hybrid_search": True,
             "limit": 10,
         }
-        
+
         # Merge with provided settings
         final_search = {**default_search, **(search_settings or {})}
-        
+
         # Generation config
         if use_gemini:
             gemini_config = r2r_client.get_gemini_config("rag")
             final_gen_config = {**gemini_config, **(generation_config or {})}
         else:
             final_gen_config = generation_config or {}
-        
+
         if ctx:
             await ctx.report_progress(50, 100, "Generating response")
-        
+
         result = await asyncio.to_thread(
             r2r_client.client.retrieval.rag,
             query=query,
             search_settings=final_search,
             rag_generation_config=final_gen_config
         )
-        
+
         if ctx:
             await ctx.report_progress(100, 100, "Complete")
-        
+
         return {
             "query": query,
             "answer": result.results.generated_answer,
@@ -554,7 +561,7 @@ def register_rag_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
                 for chunk in getattr(result.results, 'chunks', [])
             ],
         }
-    
+
     @mcp.tool
     async def code_rag(
         query: str,
@@ -564,7 +571,7 @@ def register_rag_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
     ) -> Dict[str, Any]:
         """
         RAG query optimized for code.
-        
+
         Args:
             query: Programming question
             code_context: Additional code context
@@ -572,15 +579,15 @@ def register_rag_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
         """
         if ctx:
             await ctx.info(f"Code RAG: {query}")
-        
+
         # Enhance query with code context
         enhanced_query = query
         if code_context:
             enhanced_query = f"{query}\n\nCode context:\n```\n{code_context}\n```"
-        
+
         # Use code-optimized Gemini config
         gemini_config = r2r_client.get_gemini_config("code")
-        
+
         search_settings = {
             "use_semantic_search": True,
             "use_hybrid_search": True,
@@ -589,17 +596,17 @@ def register_rag_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
             },
             "limit": 15,
         }
-        
+
         if language:
             search_settings["filters"]["language"] = {"$eq": language}
-        
+
         result = await asyncio.to_thread(
             r2r_client.client.retrieval.rag,
             query=enhanced_query,
             search_settings=search_settings,
             rag_generation_config=gemini_config
         )
-        
+
         return {
             "query": query,
             "answer": result.results.generated_answer,
@@ -609,7 +616,7 @@ def register_rag_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
                 if chunk.metadata.get("code_type") == "source_code"
             ],
         }
-```
+````
 
 ### 3.4 Agent Tools
 
@@ -622,7 +629,7 @@ import asyncio
 
 def register_agent_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
     """Регистрация agent tools."""
-    
+
     @mcp.tool
     async def agent_query(
         message: str,
@@ -634,7 +641,7 @@ def register_agent_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
     ) -> Dict[str, Any]:
         """
         Query R2R Agent (Agentic RAG).
-        
+
         Args:
             message: User message
             mode: 'rag' or 'research'
@@ -644,13 +651,13 @@ def register_agent_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
         """
         if ctx:
             await ctx.info(f"Agent query (mode={mode}): {message}")
-        
+
         # Agent message format
         agent_message = {
             "role": "user",
             "content": message,
         }
-        
+
         # Generation config
         if use_gemini:
             if mode == "research":
@@ -659,7 +666,7 @@ def register_agent_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
                 gemini_config = r2r_client.get_gemini_config("rag")
         else:
             gemini_config = {}
-        
+
         result = await asyncio.to_thread(
             r2r_client.client.retrieval.agent,
             message=agent_message,
@@ -668,7 +675,7 @@ def register_agent_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
             conversation_id=conversation_id,
             rag_generation_config=gemini_config
         )
-        
+
         return {
             "message": message,
             "mode": mode,
@@ -680,7 +687,7 @@ def register_agent_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
 
 ### 3.5 Code-Specific Tools
 
-```python
+````python
 # src/tools/code_specific.py
 from fastmcp import FastMCP, Context
 from typing import Optional, Dict, Any, List
@@ -689,7 +696,7 @@ import asyncio
 
 def register_code_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
     """Регистрация code-specific tools."""
-    
+
     @mcp.tool
     async def generate_code(
         description: str,
@@ -699,7 +706,7 @@ def register_code_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
     ) -> Dict[str, Any]:
         """
         Generate code based on description.
-        
+
         Args:
             description: What code to generate
             language: Programming language
@@ -707,13 +714,13 @@ def register_code_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
         """
         if ctx:
             await ctx.info(f"Generating {language} code: {description}")
-        
+
         prompt = f"Generate {language} code for: {description}"
         if context:
             prompt += f"\n\nContext:\n```\n{context}\n```"
-        
+
         gemini_config = r2r_client.get_gemini_config("code")
-        
+
         result = await asyncio.to_thread(
             r2r_client.client.retrieval.rag,
             query=prompt,
@@ -727,7 +734,7 @@ def register_code_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
             },
             rag_generation_config=gemini_config
         )
-        
+
         return {
             "description": description,
             "language": language,
@@ -737,7 +744,7 @@ def register_code_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
                 for chunk in getattr(result.results, 'chunks', [])
             ],
         }
-    
+
     @mcp.tool
     async def analyze_code(
         code: str,
@@ -747,7 +754,7 @@ def register_code_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
     ) -> Dict[str, Any]:
         """
         Analyze code for quality, structure, issues.
-        
+
         Args:
             code: Code to analyze
             language: Programming language
@@ -755,32 +762,32 @@ def register_code_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
         """
         if ctx:
             await ctx.info(f"Analyzing {language} code ({analysis_type})")
-        
+
         analysis_prompts = {
             "general": "Analyze this code for quality, structure, and best practices",
             "security": "Analyze this code for security vulnerabilities",
             "performance": "Analyze this code for performance issues",
             "style": "Analyze this code for style and conventions",
         }
-        
+
         prompt = f"{analysis_prompts.get(analysis_type, analysis_prompts['general'])}:\n\n```{language}\n{code}\n```"
-        
+
         gemini_config = r2r_client.get_gemini_config("reasoning")
         gemini_config["temperature"] = 0.1  # Lower for analysis
-        
+
         result = await asyncio.to_thread(
             r2r_client.client.retrieval.rag,
             query=prompt,
             rag_generation_config=gemini_config
         )
-        
+
         return {
             "code": code,
             "language": language,
             "analysis_type": analysis_type,
             "analysis": result.results.generated_answer,
         }
-    
+
     @mcp.tool
     async def extract_code_structure(
         code: str,
@@ -790,23 +797,23 @@ def register_code_tools(mcp: FastMCP, r2r_client: R2RClientWrapper):
         """Extract structure from code (functions, classes, imports)."""
         if ctx:
             await ctx.info(f"Extracting structure from {language} code")
-        
+
         prompt = f"Extract code structure from this {language} code:\n```{language}\n{code}\n```\n\nReturn JSON with functions, classes, imports, and dependencies."
-        
+
         gemini_config = r2r_client.get_gemini_config("code")
-        
+
         result = await asyncio.to_thread(
             r2r_client.client.retrieval.rag,
             query=prompt,
             rag_generation_config=gemini_config
         )
-        
+
         return {
             "code": code,
             "language": language,
             "structure": result.results.generated_answer,
         }
-```
+````
 
 ---
 
@@ -822,7 +829,7 @@ import asyncio
 
 def register_document_resources(mcp: FastMCP, r2r_client: R2RClientWrapper):
     """Регистрация document resources."""
-    
+
     @mcp.resource("r2r://documents/{document_id}")
     async def get_document_resource(document_id: str, ctx: Context = None) -> str:
         """Get document content as resource."""
@@ -830,7 +837,7 @@ def register_document_resources(mcp: FastMCP, r2r_client: R2RClientWrapper):
             r2r_client.client.documents.retrieve,
             id=document_id
         )
-        
+
         return f"""
 # Document: {result.results.title}
 
@@ -844,7 +851,7 @@ def register_document_resources(mcp: FastMCP, r2r_client: R2RClientWrapper):
 ## Content
 {getattr(result.results, 'content', 'N/A')}
 """
-    
+
     @mcp.resource("r2r://documents/{document_id}/chunks")
     async def get_document_chunks(document_id: str, ctx: Context = None) -> str:
         """Get all chunks for a document."""
@@ -852,12 +859,12 @@ def register_document_resources(mcp: FastMCP, r2r_client: R2RClientWrapper):
             r2r_client.client.documents.listChunks,
             id=document_id
         )
-        
+
         chunks_text = "\n\n---\n\n".join([
             f"## Chunk {i+1}\n\n{chunk.text}\n\n**Metadata:** {chunk.metadata}"
             for i, chunk in enumerate(chunks.results)
         ])
-        
+
         return chunks_text
 ```
 
@@ -871,7 +878,7 @@ import asyncio
 
 def register_collection_resources(mcp: FastMCP, r2r_client: R2RClientWrapper):
     """Регистрация collection resources."""
-    
+
     @mcp.resource("r2r://collections/{collection_id}")
     async def get_collection_resource(collection_id: str, ctx: Context = None) -> str:
         """Get collection information."""
@@ -879,7 +886,7 @@ def register_collection_resources(mcp: FastMCP, r2r_client: R2RClientWrapper):
             r2r_client.client.collections.retrieve,
             id=collection_id
         )
-        
+
         return f"""
 # Collection: {result.results.name}
 
@@ -896,18 +903,18 @@ def register_collection_resources(mcp: FastMCP, r2r_client: R2RClientWrapper):
 
 ### 5.1 Code Review Prompt
 
-```python
+````python
 # src/prompts/code_review.py
 from fastmcp import FastMCP
 
 def register_code_review_prompts(mcp: FastMCP):
     """Регистрация code review prompts."""
-    
+
     @mcp.prompt
     def review_code(code: str, language: str = "python") -> str:
         """
         Generate a code review prompt.
-        
+
         Args:
             code: Code to review
             language: Programming language
@@ -922,10 +929,11 @@ def register_code_review_prompts(mcp: FastMCP):
 Code:
 ```{language}
 {code}
-```
+````
 
 Provide a detailed review with specific suggestions for improvement."""
-```
+
+````
 
 ### 5.2 Code Explanation Prompt
 
@@ -935,12 +943,12 @@ from fastmcp import FastMCP
 
 def register_code_explanation_prompts(mcp: FastMCP):
     """Регистрация code explanation prompts."""
-    
+
     @mcp.prompt
     def explain_code(code: str, language: str = "python", detail_level: str = "detailed") -> str:
         """
         Generate a code explanation prompt.
-        
+
         Args:
             code: Code to explain
             language: Programming language
@@ -951,19 +959,21 @@ def register_code_explanation_prompts(mcp: FastMCP):
             "detailed": "Provide a detailed explanation with examples",
             "comprehensive": "Provide a comprehensive explanation covering all aspects",
         }
-        
+
         return f"""{detail_instructions.get(detail_level, detail_instructions['detailed'])} of this {language} code:
 
 ```{language}
 {code}
-```
+````
 
 Explain:
+
 1. What the code does
 2. How it works
 3. Key concepts and patterns
 4. Potential use cases"""
-```
+
+````
 
 ### 5.3 Code Generation Prompt
 
@@ -973,12 +983,12 @@ from fastmcp import FastMCP
 
 def register_code_generation_prompts(mcp: FastMCP):
     """Регистрация code generation prompts."""
-    
+
     @mcp.prompt
     def generate_code_prompt(description: str, language: str, requirements: str = "") -> str:
         """
         Generate a code generation prompt.
-        
+
         Args:
             description: What code to generate
             language: Programming language
@@ -994,9 +1004,9 @@ Please provide:
 2. Comments explaining key parts
 3. Error handling where appropriate
 4. Example usage if applicable"""
-        
+
         return prompt
-```
+````
 
 ---
 
@@ -1022,36 +1032,36 @@ import os
 
 def create_r2r_mcp_server() -> FastMCP:
     """Create and configure R2R MCP server."""
-    
+
     # Initialize MCP server
     mcp = FastMCP(
         name="R2R Server",
         version="1.0.0",
         description="MCP server for R2R API with Gemini optimization"
     )
-    
+
     # Initialize R2R client
     r2r_client = R2RClientWrapper(
         base_url=os.getenv("R2R_BASE_URL", "http://localhost:7272"),
         api_key=os.getenv("R2R_API_KEY")
     )
-    
+
     # Register all tools
     register_document_tools(mcp, r2r_client)
     register_search_tools(mcp, r2r_client)
     register_rag_tools(mcp, r2r_client)
     register_agent_tools(mcp, r2r_client)
     register_code_tools(mcp, r2r_client)
-    
+
     # Register all resources
     register_document_resources(mcp, r2r_client)
     register_collection_resources(mcp, r2r_client)
-    
+
     # Register all prompts
     register_code_review_prompts(mcp)
     register_code_explanation_prompts(mcp)
     register_code_generation_prompts(mcp)
-    
+
     return mcp
 
 # Main entry point
@@ -1069,18 +1079,18 @@ from typing import Optional
 
 class R2RMCPServerConfig:
     """Configuration for R2R MCP Server."""
-    
+
     # R2R API
     R2R_BASE_URL: str = os.getenv("R2R_BASE_URL", "http://localhost:7272")
     R2R_API_KEY: Optional[str] = os.getenv("R2R_API_KEY")
-    
+
     # Gemini API
     GOOGLE_API_KEY: Optional[str] = os.getenv("GOOGLE_API_KEY")
-    
+
     # Server settings
     SERVER_NAME: str = "R2R Server"
     SERVER_VERSION: str = "1.0.0"
-    
+
     # Default Gemini configs
     DEFAULT_GEMINI_MODEL: str = "google/gemini-2.5-flash"
     DEFAULT_TEMPERATURE: float = 0.3
@@ -1092,6 +1102,7 @@ class R2RMCPServerConfig:
 ## 📋 Часть 7: Roadmap реализации
 
 ### Phase 1: Базовая инфраструктура (1 неделя)
+
 - [ ] Настройка проекта и зависимостей
 - [ ] Создание R2RClientWrapper
 - [ ] Базовая структура FastMCP server
@@ -1099,18 +1110,21 @@ class R2RMCPServerConfig:
 - [ ] Тестирование подключения к R2R
 
 ### Phase 2: Search & RAG Tools (1 неделя)
+
 - [ ] Реализация search tools (semantic, hybrid, HyDE)
 - [ ] Реализация RAG tools
 - [ ] Code-specific search
 - [ ] Интеграция Gemini конфигураций
 
 ### Phase 3: Agent & Advanced Tools (1 неделя)
+
 - [ ] Реализация agent tools
 - [ ] Code generation tools
 - [ ] Code analysis tools
 - [ ] Code structure extraction
 
 ### Phase 4: Resources & Prompts (3-4 дня)
+
 - [ ] Реализация document resources
 - [ ] Реализация collection resources
 - [ ] Реализация chunk resources
@@ -1119,6 +1133,7 @@ class R2RMCPServerConfig:
 - [ ] Создание code generation prompts
 
 ### Phase 5: Testing & Documentation (3-4 дня)
+
 - [ ] Unit tests для всех tools
 - [ ] Integration tests
 - [ ] Документация API
@@ -1126,6 +1141,7 @@ class R2RMCPServerConfig:
 - [ ] README с инструкциями
 
 ### Phase 6: Deployment & Optimization (3-4 дня)
+
 - [ ] Настройка HTTP transport для production
 - [ ] Оптимизация производительности
 - [ ] Error handling и logging
@@ -1136,6 +1152,7 @@ class R2RMCPServerConfig:
 ## 🎯 Ключевые возможности
 
 ### Tools (20+)
+
 1. **Documents:** upload, get, list, delete, update metadata
 2. **Search:** semantic, hybrid, HyDE, code search
 3. **RAG:** query, code-optimized RAG
@@ -1146,6 +1163,7 @@ class R2RMCPServerConfig:
 8. **Embeddings:** generate, batch
 
 ### Resources (10+)
+
 1. `r2r://documents/{id}` - Document content
 2. `r2r://documents/{id}/chunks` - Document chunks
 3. `r2r://collections/{id}` - Collection info
@@ -1153,6 +1171,7 @@ class R2RMCPServerConfig:
 5. `r2r://kg/entities/{id}` - Knowledge graph entities
 
 ### Prompts (5+)
+
 1. Code review
 2. Code explanation
 3. Code generation
@@ -1164,18 +1183,21 @@ class R2RMCPServerConfig:
 ## 📊 Метрики успеха
 
 ### Функциональность
+
 - [ ] Все R2R API endpoints доступны через MCP
 - [ ] Gemini оптимизация для всех операций
 - [ ] Code-specific tools работают корректно
 - [ ] Resources предоставляют актуальные данные
 
 ### Производительность
+
 - [ ] Tool execution < 2s для простых операций
 - [ ] RAG queries < 5s
 - [ ] Resource access < 1s
 - [ ] Streaming работает корректно
 
 ### Качество
+
 - [ ] 100% покрытие тестами для критичных tools
 - [ ] Error handling для всех операций
 - [ ] Документация для всех tools/resources/prompts
@@ -1185,12 +1207,14 @@ class R2RMCPServerConfig:
 ## 🔗 Интеграция с планами
 
 ### Связь с R2R_MAXIMIZATION_PLAN.md
+
 - Все advanced features из плана доступны через MCP
 - Advanced ingestion через `upload_document` tool
 - Advanced search через `hyde_search`, `code_search`
 - Data quality через `analyze_code`, chunk management tools
 
 ### Связь с GEMINI_R2R_INTEGRATION_PLAN.md
+
 - Все Gemini конфигурации интегрированы
 - Task profiles используются автоматически
 - Thinking budget оптимизирован для каждой задачи

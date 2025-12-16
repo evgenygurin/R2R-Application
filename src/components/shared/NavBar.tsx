@@ -192,8 +192,6 @@ export const Navbar = forwardRef<React.ElementRef<'nav'>, NavbarProps>(
               <ThemeToggle />
               {brandingConfig.navbar.showDocsButton && (
                 <Button
-                  color="primary"
-                  shape="outline_wide"
                   onClick={() =>
                     window.open('https://r2r-docs.sciphi.ai', '_blank')
                   }

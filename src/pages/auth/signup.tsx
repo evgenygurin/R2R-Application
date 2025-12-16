@@ -151,9 +151,7 @@ const LoginPage: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center justify-between">
-            <Button color="primary" className="w-full">
-              Sign up with Email
-            </Button>
+            <Button className="w-full">Sign up with Email</Button>
           </div>
         </form>
 

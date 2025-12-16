@@ -148,8 +148,6 @@ export const DeleteButton: React.FC<ExtendedDeleteButtonProps> = ({
       <AlertDialogTrigger asChild>
         <Button
           className={`pl-2 pr-2 py-2 px-4 ${isDisabled ? 'cursor-not-allowed' : ''}`}
-          color="danger"
-          shape="rounded"
           disabled={isDisabled}
           style={{ zIndex: 20, minWidth: '100px' }}
         >

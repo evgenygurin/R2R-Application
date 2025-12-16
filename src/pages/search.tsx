@@ -224,7 +224,6 @@ const SearchPage: React.FC = () => {
                   />
                   <Button
                     type="submit"
-                    color="filled"
                     className="px-4 py-2 h-10 rounded-r-full"
                     disabled={loading}
                   >

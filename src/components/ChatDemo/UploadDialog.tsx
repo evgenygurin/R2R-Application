@@ -96,7 +96,6 @@ export const UploadDialog: React.FC<UploadDialogProps> = ({
           onClick={handleUpload}
           disabled={files.length === 0}
           className={`mt-4 py-2 px-4 rounded-full transition-colors`}
-          color={files.length === 0 ? 'disabled' : 'filled'}
         >
           Upload
         </Button>

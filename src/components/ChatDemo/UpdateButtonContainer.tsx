@@ -76,9 +76,9 @@ const UpdateButtonContainer: React.FC<UpdateButtonContainerProps> = ({
       <Button
         onClick={handleUpdateButtonClick}
         disabled={isUpdating}
-        color={isUpdating ? 'disabled' : 'filled'}
-        shape="slim"
-        tooltip="Update Document"
+        variant="default"
+        size="icon"
+        title="Update Document"
       >
         {isUpdating ? (
           <Spinner className="h-6 w-6 text-white" />

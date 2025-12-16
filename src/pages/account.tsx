@@ -182,10 +182,7 @@ const Index: React.FC = () => {
                       <p className="text-gray-400">{userProfile?.email}</p>
                     </div>
                   </div>
-                  <Button
-                    color="primary"
-                    onClick={() => setIsUpdateModalOpen(true)}
-                  >
+                  <Button onClick={() => setIsUpdateModalOpen(true)}>
                     <Pencil className="w-4 h-4 mr-2" />
                     Edit Profile
                   </Button>

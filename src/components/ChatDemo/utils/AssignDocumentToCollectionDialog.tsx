@@ -204,7 +204,6 @@ const AssignDocumentToCollectionDialog: React.FC<
             <DialogFooter className="mt-4 flex justify-end space-x-2">
               <Button
                 onClick={handleAssign}
-                color="filled"
                 disabled={assigning || selectedDocumentIds.length === 0}
                 style={{ zIndex: 20 }}
               >

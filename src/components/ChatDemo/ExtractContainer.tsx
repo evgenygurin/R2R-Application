@@ -63,9 +63,9 @@ const ExtractButtonContainer: React.FC<ExtractContainerProps> = ({
       <Button
         onClick={handleDocumentExtraction}
         disabled={isExtracting || !isIngestionValid()}
-        color={isExtracting ? 'disabled' : 'text_gray'}
-        shape="slim"
-        tooltip="Document Extraction"
+        variant="ghost"
+        size="icon"
+        title="Document Extraction"
       >
         {isExtracting ? (
           <Spinner className="h-6 w-6 text-white" />

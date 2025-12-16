@@ -70,9 +70,9 @@ const DownloadButtonContainer: React.FC<DownloadFileContainerProps> = ({
       <Button
         onClick={handleDocumentDownload}
         disabled={isDownloading}
-        color={isDownloading ? 'disabled' : 'text_gray'}
-        shape="slim"
-        tooltip="Download Document"
+        variant="ghost"
+        size="icon"
+        title="Download Document"
       >
         {isDownloading ? (
           <Spinner className="h-6 w-6 text-white" />

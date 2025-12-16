@@ -201,10 +201,10 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
             setSelectedDocumentId(doc.id);
             setIsDocumentInfoDialogOpen(true);
           }}
-          color="text_gray"
           disabled={doc.ingestionStatus !== IngestionStatus.SUCCESS}
-          shape="slim"
-          tooltip="View Document Info"
+          variant="ghost"
+          size="icon"
+          title="View Document Info"
         >
           <FileSearch2 className="h-6 w-6" />
         </Button>
@@ -226,7 +226,7 @@ const DocumentsTable: React.FC<DocumentsTableProps> = ({
             {/* Column toggle popover */}
             <Popover>
               <PopoverTrigger asChild>
-                <Button color="light">
+                <Button>
                   <SlidersHorizontal className="h-4 w-4" />
                 </Button>
               </PopoverTrigger>

@@ -146,11 +146,7 @@ export const CreateDialog: React.FC<CreateDialogProps> = ({
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <label className="block text-sm font-medium">Chunks</label>
-              <Button
-                onClick={addChunk}
-                color="secondary"
-                className="flex items-center gap-1"
-              >
+              <Button onClick={addChunk} className="flex items-center gap-1">
                 <Plus className="h-4 w-4" />
                 Add Chunk
               </Button>
@@ -198,9 +194,7 @@ export const CreateDialog: React.FC<CreateDialogProps> = ({
         </div>
 
         <div className="flex justify-end gap-2 mt-4">
-          <Button onClick={onClose} color="secondary">
-            Cancel
-          </Button>
+          <Button onClick={onClose}>Cancel</Button>
           <Button
             onClick={handleCreate}
             disabled={
@@ -208,7 +202,6 @@ export const CreateDialog: React.FC<CreateDialogProps> = ({
               !isMetadataValid ||
               !isDocumentIdValid
             }
-            color="filled"
           >
             Create Chunks
           </Button>

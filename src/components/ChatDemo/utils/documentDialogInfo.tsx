@@ -39,9 +39,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import Pagination from '@/components/ui/pagination';
 import { Separator } from '@/components/ui/separator';
 import { ShadcnButton as Button } from '@/components/ui/ShadcnButton';
+import { TablePagination } from '@/components/ui/TablePagination';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { useUserContext } from '@/context/UserContext';
@@ -492,7 +492,7 @@ const DocumentInfoDialog: React.FC<DocumentInfoDialogProps> = ({
                       />
                       {chunksTotalPages > 1 && (
                         <div className="mt-4">
-                          <Pagination
+                          <TablePagination
                             currentPage={chunksCurrentPage}
                             totalPages={chunksTotalPages}
                             onPageChange={goToChunksPage}
@@ -515,7 +515,7 @@ const DocumentInfoDialog: React.FC<DocumentInfoDialogProps> = ({
                       <ExpandableDocumentEntities entities={currentEntities} />
                       {entitiesTotalPages > 1 && (
                         <div className="mt-4">
-                          <Pagination
+                          <TablePagination
                             currentPage={entitiesCurrentPage}
                             totalPages={entitiesTotalPages}
                             onPageChange={goToEntitiesPage}
@@ -540,7 +540,7 @@ const DocumentInfoDialog: React.FC<DocumentInfoDialogProps> = ({
                       />
                       {relationshipsTotalPages > 1 && (
                         <div className="mt-4">
-                          <Pagination
+                          <TablePagination
                             currentPage={relationshipsCurrentPage}
                             totalPages={relationshipsTotalPages}
                             onPageChange={goToRelationshipsPage}
