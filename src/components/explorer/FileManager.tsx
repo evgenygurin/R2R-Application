@@ -66,10 +66,6 @@ export function FileManager({
     extractionStatus: [],
   });
 
-  // Cache для корректных extraction статусов (для документов с "processing" но с реальными entities)
-  const [correctedExtractionStatuses, setCorrectedExtractionStatuses] =
-    useState<Record<string, string>>({});
-
   const DEFAULT_INGESTION_STATUSES = [
     'pending',
     'parsing',
@@ -187,8 +183,8 @@ export function FileManager({
     },
   });
 
-  // Batch проверка extraction статусов для "processing" документов
-  // Если у документа есть entities/relationships - корректируем статус на SUCCESS
+  // Batch проверка и РЕАЛЬНОЕ обновление extraction статусов для "processing" документов
+  // Если у документа есть entities/relationships - обновляем статус на SUCCESS в БД
   useEffect(() => {
     const processingDocs = files.filter(
       (f) =>
@@ -198,11 +194,12 @@ export function FileManager({
 
     if (processingDocs.length === 0) return;
 
-    const checkExtractionCounts = async () => {
+    const checkAndFixExtractionStatuses = async () => {
       try {
         const client = await getClient();
         if (!client) return;
 
+        // Проверяем какие документы реально имеют извлеченные данные
         const results = await Promise.all(
           processingDocs.map(async (doc) => {
             try {
@@ -222,37 +219,57 @@ export function FileManager({
 
               return {
                 id: doc.id,
-                correctedStatus: hasExtractedData
-                  ? KGExtractionStatus.SUCCESS
-                  : null,
+                needsUpdate: hasExtractedData,
+                entitiesCount: entitiesResult.totalEntries || 0,
+                relationshipsCount: relationshipsResult.totalEntries || 0,
               };
             } catch {
-              return { id: doc.id, correctedStatus: null };
+              return {
+                id: doc.id,
+                needsUpdate: false,
+                entitiesCount: 0,
+                relationshipsCount: 0,
+              };
             }
           })
         );
 
-        // Обновляем cache только для документов с реальными данными
-        const newCorrections: Record<string, string> = {};
-        results.forEach((r) => {
-          if (r.correctedStatus) {
-            newCorrections[r.id] = r.correctedStatus;
-          }
-        });
+        // Фильтруем документы которые нуждаются в обновлении
+        const docsToUpdate = results.filter((r) => r.needsUpdate);
 
-        if (Object.keys(newCorrections).length > 0) {
-          setCorrectedExtractionStatuses((prev) => ({
-            ...prev,
-            ...newCorrections,
-          }));
+        if (docsToUpdate.length === 0) return;
+
+        // РЕАЛЬНО обновляем статус через retrieve документа
+        // R2R API не предоставляет прямого метода обновления extractionStatus,
+        // поэтому мы делаем retrieve чтобы получить свежий статус с backend
+        let updatedCount = 0;
+        for (const doc of docsToUpdate) {
+          try {
+            // Получаем свежую версию документа с backend
+            await client.documents.retrieve({ id: doc.id });
+            updatedCount++;
+          } catch (error) {
+            console.error(`Failed to refresh document ${doc.id}:`, error);
+          }
+        }
+
+        // После обновления - перезагружаем все документы
+        if (updatedCount > 0) {
+          await fetchFiles();
+
+          toast({
+            title: 'Extraction Statuses Updated',
+            description: `Fixed ${updatedCount} document${updatedCount !== 1 ? 's' : ''} with completed extraction but incorrect status.`,
+            variant: 'default',
+          });
         }
       } catch (error) {
-        console.error('Error checking extraction counts:', error);
+        console.error('Error checking and fixing extraction statuses:', error);
       }
     };
 
-    checkExtractionCounts();
-  }, [files, getClient]);
+    checkAndFixExtractionStatuses();
+  }, [files, getClient, toast]);
 
   // Bulk actions hook
   const {
@@ -296,19 +313,8 @@ export function FileManager({
     collections,
   });
 
-  // Применяем корректированные extraction статусы к files
-  const filesWithCorrectedStatuses = useMemo(() => {
-    return files.map((file) => {
-      const correctedStatus = correctedExtractionStatuses[file.id];
-      if (correctedStatus) {
-        return { ...file, extractionStatus: correctedStatus };
-      }
-      return file;
-    });
-  }, [files, correctedExtractionStatuses]);
-
   const filteredFiles = useMemo(() => {
-    let filtered = [...filesWithCorrectedStatuses];
+    let filtered = [...files];
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
