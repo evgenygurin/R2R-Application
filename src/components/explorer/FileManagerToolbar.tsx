@@ -3,6 +3,7 @@
 import { Upload } from 'lucide-react';
 import React from 'react';
 
+import { CollectionGraphActions } from '@/components/explorer/CollectionGraphActions';
 import { ExplorerBreadcrumb } from '@/components/explorer/ExplorerBreadcrumb';
 import { SearchBar } from '@/components/explorer/SearchBar';
 import { SyncIndicator } from '@/components/explorer/SyncIndicator';
@@ -56,6 +57,11 @@ interface FileManagerToolbarProps {
 
   /** Callback клика на кнопку Upload */
   onUploadClick: () => void;
+
+  /** ID выбранной коллекции (для graph actions) */
+  selectedCollectionId?: string | null;
+  /** Callback после успешного graph action */
+  onGraphActionComplete?: () => void;
 }
 
 export function FileManagerToolbar({
@@ -76,6 +82,8 @@ export function FileManagerToolbar({
   viewMode,
   onViewModeChange,
   onUploadClick,
+  selectedCollectionId,
+  onGraphActionComplete,
 }: FileManagerToolbarProps) {
   return (
     <div className="flex flex-col gap-3 p-4 border-b bg-background">
@@ -91,6 +99,10 @@ export function FileManagerToolbar({
         </div>
 
         <div className="flex items-center gap-2 ml-auto mr-4">
+          <CollectionGraphActions
+            collectionId={selectedCollectionId ?? null}
+            onActionComplete={onGraphActionComplete}
+          />
           <SyncIndicator isPolling={isPolling} count={pendingCount} />
           <SearchBar
             searchQuery={searchQuery}

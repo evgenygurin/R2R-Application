@@ -640,6 +640,8 @@ export function FileManager({
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         onUploadClick={() => setUploadModalOpen(true)}
+        selectedCollectionId={selectedCollectionId}
+        onGraphActionComplete={fetchFiles}
       />
 
       <BulkActionsBar
